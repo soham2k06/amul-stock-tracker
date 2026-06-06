@@ -1,4 +1,4 @@
-import { SUBSTORES } from "@/lib/constants";
+import { STORE_ID, SUBSTORES } from "@/lib/constants";
 import type {
   AmulPincodeResponse,
   AmulProduct,
@@ -84,10 +84,10 @@ export class AmulApi {
     if (this.storeVersion) return;
     try {
       const response = await this.amulApi.get<string>(
-        "https://shop.amul.com/ms/store/amul/auto/EN/storeinfo.js"
+        "https://shop.amul.com/ms/store/amul/auto/EN/storeinfo.js",
       );
       const match = response.data.match(
-        /req\.query\.v\s*=\s*['"]?([^'";\s]+)['"]?/
+        /req\.query\.v\s*=\s*['"]?([^'";\s]+)['"]?/,
       );
       this.storeVersion = match?.[1] ?? 4;
     } catch {
@@ -97,7 +97,7 @@ export class AmulApi {
 
   public async initCookies() {
     const browseResponse = await this.amulApi.get<string>(
-      "https://shop.amul.com/en/browse/protein"
+      "https://shop.amul.com/en/browse/protein",
     );
 
     const setCookies = browseResponse.headers["set-cookie"];
@@ -121,11 +121,11 @@ export class AmulApi {
           cookie: await this.jar.getCookieString(requestUrl),
           tid: await this.buildTidHeader(),
         },
-      }
+      },
     );
 
     const sessionObj = JSON.parse(
-      infoResponse.data.replace("session = ", "")
+      infoResponse.data.replace("session = ", ""),
     ) as AmulSessionInfo;
     this.tid = sessionObj.tid;
   }
@@ -149,7 +149,7 @@ export class AmulApi {
     await this.amulApi.put(
       "https://shop.amul.com/entity/ms.settings/_/setPreferences",
       { data: { store: record.substore } },
-      { headers: { ...defaultHeaders, tid, cookie: cookieStr } }
+      { headers: { ...defaultHeaders, tid, cookie: cookieStr } },
     );
 
     this.pincodeRecord = record;
@@ -168,7 +168,7 @@ export class AmulApi {
           tid: await this.buildTidHeader(),
           cookie: await this.jar.getCookieString("https://shop.amul.com"),
         },
-      }
+      },
     );
     return response.data.records;
   }
@@ -186,12 +186,13 @@ export class AmulApi {
   }
 
   private async buildTidHeader(): Promise<string> {
-    const STORE_ID = "62fa94df8c13af2e242eba16";
     const timestamp = Date.now().toString();
     const rand = Math.floor(Math.random() * 1000);
     const sessionID = this.tid ?? "";
     const encoder = new TextEncoder();
-    const bytes = encoder.encode(`${STORE_ID}:${timestamp}:${rand}:${sessionID}`);
+    const bytes = encoder.encode(
+      `${STORE_ID}:${timestamp}:${rand}:${sessionID}`,
+    );
     const hashBuffer = await crypto.subtle.digest("SHA-256", bytes);
     const hash = Array.from(new Uint8Array(hashBuffer))
       .map((b) => b.toString(16).padStart(2, "0"))
@@ -199,7 +200,11 @@ export class AmulApi {
     return `${timestamp}:${rand}:${hash}`;
   }
 
-  private getProteinProductsUrl(substoreId?: string): string {
+  private getProteinProductsUrl(opts: {
+    substoreId?: string;
+    limit?: number;
+    start?: number;
+  }): string {
     const params = new URLSearchParams();
     for (const field of productFields) {
       params.append(`fields[${field}]`, "1");
@@ -210,26 +215,31 @@ export class AmulApi {
     params.append("filters[0][original]", "1");
     params.append("facets", "true");
     params.append("facetgroup", "default_category_facet");
-    params.append("limit", "32");
+    params.append("limit", String(opts.limit ?? 8));
     params.append("total", "1");
-    params.append("start", "0");
-    params.append("cdc", "5s");
+    params.append("start", String(opts.start ?? 0));
     params.append("v", this.storeVersion.toString() || "4");
     params.append("device_type", "other");
-    if (substoreId) params.append("substore", substoreId);
+    if (opts.substoreId) params.append("substore", opts.substoreId);
     const query = params.toString().replace(/%5B/g, "[").replace(/%5D/g, "]");
     return `https://shop.amul.com/api/1/entity/ms.products?${query}`;
   }
 
   public async getProteinProducts(opts?: {
     search?: string;
-  }): Promise<AmulProduct[]> {
+    limit?: number;
+    start?: number;
+  }): Promise<{ data: AmulProduct[]; total: number }> {
     const versionPromise = this.ensureStoreVersion();
     const substoreId = this.getSubstoreId();
     await versionPromise;
 
     const response = await this.amulApi.get<AmulProductsResponse>(
-      this.getProteinProductsUrl(substoreId),
+      this.getProteinProductsUrl({
+        substoreId,
+        limit: opts?.limit,
+        start: opts?.start,
+      }),
       {
         headers: {
           ...defaultHeaders,
@@ -237,21 +247,20 @@ export class AmulApi {
           cookie: await this.jar.getCookieString("https://shop.amul.com"),
           tid: await this.buildTidHeader(),
         },
-      }
+      },
     );
-
     const products = response.data.data ?? [];
-    if (!products.length) return [];
+    const total = response.data.paging?.total ?? products.length;
 
     if (opts?.search) {
       const re = new RegExp(opts.search.split("").join(".*?"), "i");
-      return products.filter(
-        (p) =>
-          re.test(p.name) || re.test(p.sku ?? "") || re.test(p.alias)
+      const filtered = products.filter(
+        (p) => re.test(p.name) || re.test(p.sku ?? "") || re.test(p.alias),
       );
+      return { data: filtered, total };
     }
 
-    return products;
+    return { data: products, total };
   }
 
   public close() {
@@ -276,7 +285,7 @@ export async function createAmulApi(pincode: string): Promise<AmulApi> {
   if (!records.length) {
     throw new AmulError(
       `No substore found for pincode ${pincode}`,
-      AMUL_ERROR_CODE.PINCODE_NOT_FOUND
+      AMUL_ERROR_CODE.PINCODE_NOT_FOUND,
     );
   }
 

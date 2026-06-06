@@ -25,14 +25,23 @@ export type AmulProduct = {
   available: number;
   inventory_quantity?: number;
   inventory_allow_out_of_stock?: number;
-  images?: Array<{ url: string }>;
+  images?: Array<{ image: string }>;
   price?: number;
-  mrp?: number;
+  compare_price?: number;
+  original_price?: number;
   categories?: string[];
+  metafields?: Record<string, string | number | boolean | null | undefined>;
+  discounts?: Array<{ discount_type?: string; discount_value?: number }>;
 };
 
 export type AmulProductsResponse = {
   data: AmulProduct[];
+  paging: {
+    total: number;
+    start: number;
+    limit: number;
+    count: number;
+  };
 };
 
 export type ProductAvailability = {
@@ -52,6 +61,8 @@ export type ProductAvailability = {
   imageUrl?: string;
   price?: number;
   mrp?: number;
+  discount?: number;
+  label?: "new" | "bestseller" | "trending";
   productUrl: string;
 
   source: "amul";

@@ -9,14 +9,16 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@base-ui/react": "^1.5.0",
     "@prisma/client": "6.19.3",
+    "@tanstack/react-query": "^5.101.0",
     "axios": "^1.17.0",
     "axios-cookiejar-support": "^7.0.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.17.0",
     "next": "16.2.7",
-    "radix-ui": "^1.4.3",
+    "nuqs": "^2.8.9",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "shadcn": "^4.10.0",

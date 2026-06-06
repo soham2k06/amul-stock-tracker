@@ -1,3 +1,5 @@
+export const STORE_ID = "62fa94df8c13af2e242eba16";
+
 export const SUBSTORES = [
   {
     _id: "6707977fec74db0032682974",

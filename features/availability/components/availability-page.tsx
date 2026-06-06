@@ -1,165 +1,477 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Search, PackageCheck, PackageX, ExternalLink, Loader2 } from "lucide-react";
+import Image from "next/image";
+import { useQuery } from "@tanstack/react-query";
+import {
+  parseAsInteger,
+  parseAsString,
+  parseAsStringLiteral,
+  useQueryStates,
+} from "nuqs";
+import { QUERY_KEYS } from "@/constants/query-keys";
+import {
+  Search,
+  PackageCheck,
+  PackageX,
+  ExternalLink,
+  LayoutList,
+  LayoutGrid,
+} from "lucide-react";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from "@/components/ui/input-group";
 import { cn } from "@/lib/utils";
 import type { ProductAvailability } from "@/types/amul";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PincodeCombobox } from "./pincode-combobox";
 
-type FetchState =
-  | { status: "idle" }
-  | { status: "loading" }
-  | { status: "success"; results: ProductAvailability[]; pincode: string }
-  | { status: "error"; message: string };
+type AvailabilityResponse = { results: ProductAvailability[]; total: number };
+
+const LIMIT_OPTIONS = [8, 16, 32];
+const PINCODE_RE = /^\d{6}$/;
+const VIEWS = ["list", "card"] as const;
+
+const LABEL_STYLES: Record<
+  NonNullable<ProductAvailability["label"]>,
+  string
+> = {
+  new: "bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-400",
+  bestseller:
+    "bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400",
+  trending:
+    "bg-purple-50 text-purple-700 dark:bg-purple-950/50 dark:text-purple-400",
+};
+
+const LABEL_TEXT: Record<NonNullable<ProductAvailability["label"]>, string> = {
+  new: "New",
+  bestseller: "Best Seller",
+  trending: "Trending",
+};
 
 export function AvailabilityPage() {
-  const [pincode, setPincode] = useState("");
-  const [filter, setFilter] = useState("");
-  const [fetchState, setFetchState] = useState<FetchState>({ status: "idle" });
+  const [params, setParams] = useQueryStates({
+    pincode: parseAsString.withDefault(""),
+    q: parseAsString.withDefault(""),
+    start: parseAsInteger.withDefault(0),
+    limit: parseAsInteger.withDefault(8),
+    view: parseAsStringLiteral(VIEWS).withDefault("list"),
+  });
 
-  useEffect(() => {
-    if (!/^\d{6}$/.test(pincode)) return;
+  const hasPincode = PINCODE_RE.test(params.pincode);
 
-    let cancelled = false;
-    setFetchState({ status: "loading" });
+  const { data, isLoading, isError, error } = useQuery<AvailabilityResponse>({
+    queryKey: QUERY_KEYS.availability({
+      pincode: params.pincode,
+      q: params.q,
+      start: params.start,
+      limit: params.limit,
+    }),
+    queryFn: async ({ signal }) => {
+      const sp = new URLSearchParams({ pincode: params.pincode });
+      if (params.q) sp.set("q", params.q);
+      sp.set("start", String(params.start));
+      sp.set("limit", String(params.limit));
+      const res = await fetch(`/api/availability?${sp}`, { signal });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Something went wrong");
+      return json as AvailabilityResponse;
+    },
+    enabled: hasPincode,
+  });
 
-    fetch(`/api/availability?pincode=${pincode}`)
-      .then(async (res) => {
-        const json = await res.json();
-        if (cancelled) return;
-        if (!res.ok) {
-          setFetchState({ status: "error", message: json.error ?? "Something went wrong" });
-        } else {
-          setFetchState({ status: "success", results: json.results, pincode });
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setFetchState({ status: "error", message: "Failed to reach the server" });
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [pincode]);
-
-  const visibleResults =
-    fetchState.status === "success"
-      ? filter.trim() === ""
-        ? fetchState.results
-        : fetchState.results.filter((p) =>
-            p.name.toLowerCase().includes(filter.toLowerCase())
-          )
-      : [];
+  const total = data?.total ?? 0;
+  const totalPages = Math.ceil(total / params.limit);
+  const currentPage = Math.floor(params.start / params.limit) + 1;
 
   return (
-    <div className="flex flex-col flex-1 bg-zinc-50 dark:bg-zinc-950">
-      <div className="w-full max-w-3xl mx-auto px-6 py-12 flex flex-col gap-8">
+    <div className="flex flex-col flex-1">
+      <div className="w-full max-w-3xl mx-auto p-4 md:px-6 md:py-12 flex flex-col gap-8">
         <header className="flex flex-col gap-2">
-          <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
+          <h1 className="text-xl md:text-2xl font-semibold tracking-tight">
             Amul Product Availability
           </h1>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">
-            Select your pincode to see what's in stock
+          <p className="text-sm text-muted-foreground">
+            Select your pincode to see what&apos;s in stock
           </p>
         </header>
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-          <div className="flex flex-col gap-1.5 sm:w-56">
-            <label htmlFor="pincode" className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+          <div className="flex flex-col gap-1.5 sm:w-64">
+            <label
+              htmlFor="pincode"
+              className="text-sm font-medium text-muted-foreground"
+            >
               Pincode
             </label>
-            <PincodeCombobox value={pincode} onChange={setPincode} />
+            <PincodeCombobox
+              value={params.pincode}
+              onChange={(val) => setParams({ pincode: val, start: 0 })}
+            />
           </div>
 
-          {fetchState.status === "success" && (
-            <div className="relative flex-1">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
-              <input
+          {hasPincode && (
+            <InputGroup className="flex-1">
+              <InputGroupAddon>
+                <Search />
+              </InputGroupAddon>
+              <InputGroupInput
                 type="text"
-                placeholder="Filter products..."
-                value={filter}
-                onChange={(e) => setFilter(e.target.value)}
-                className="h-10 w-full rounded-lg border border-zinc-200 bg-white pl-9 pr-3 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-900 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-50 dark:placeholder:text-zinc-600 dark:focus:ring-zinc-50"
+                placeholder="Search products..."
+                value={params.q}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  setParams({ q: e.target.value, start: 0 })
+                }
               />
-            </div>
+            </InputGroup>
           )}
         </div>
 
-        {fetchState.status === "loading" && (
-          <div className="flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Loading products...
+        {isError && (
+          <div className="rounded-2xl border border-destructive/40 bg-destructive/20 px-4 py-3 text-sm text-destructive">
+            {(error as Error).message}
           </div>
         )}
 
-        {fetchState.status === "error" && (
-          <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-400">
-            {fetchState.message}
-          </div>
-        )}
-
-        {fetchState.status === "success" && (
+        {isLoading && (
           <section className="flex flex-col gap-4">
-            <p className="text-sm text-zinc-500 dark:text-zinc-400">
-              {visibleResults.length === 0
-                ? filter
-                  ? `No products match "${filter}"`
-                  : "No products found"
-                : `${visibleResults.length} product${visibleResults.length === 1 ? "" : "s"}`}
-            </p>
-
-            <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {visibleResults.map((product) => (
-                <ProductCard key={product.productId} product={product} />
+            <div className="flex items-center justify-between gap-4">
+              <Skeleton className="h-4 w-24" />
+              <div className="flex items-center gap-2">
+                <Skeleton className="h-8 w-16 rounded-lg" />
+                <Skeleton className="h-8 w-28" />
+              </div>
+            </div>
+            <ul
+              className={cn(
+                "grid gap-3",
+                params.view === "card"
+                  ? "grid-cols-2 sm:grid-cols-3"
+                  : "grid-cols-1",
+              )}
+            >
+              {Array.from({ length: params.limit }).map((_, i) => (
+                <ProductCardSkeleton key={i} view={params.view} />
               ))}
             </ul>
           </section>
+        )}
+
+        {data && (
+          <Tabs
+            value={params.view}
+            onValueChange={(v) =>
+              v && setParams({ view: v as "list" | "card" })
+            }
+          >
+            <section className="flex flex-col gap-4">
+              <div className="flex items-center flex-wrap justify-between gap-4">
+                <p className="text-sm text-muted-foreground">
+                  {total === 0
+                    ? params.q
+                      ? `No products match "${params.q}"`
+                      : "No products found"
+                    : `${total} product${total === 1 ? "" : "s"}`}
+                </p>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <TabsList>
+                    <TabsTrigger value="list">
+                      <LayoutList className="h-4 w-4" />
+                      List
+                    </TabsTrigger>
+                    <TabsTrigger value="card">
+                      <LayoutGrid className="h-4 w-4" />
+                      Grid
+                    </TabsTrigger>
+                  </TabsList>
+
+                  <span className="text-xs text-muted-foreground">
+                    Per page
+                  </span>
+                  <Select
+                    value={String(params.limit)}
+                    onValueChange={(val) =>
+                      setParams({ limit: Number(val), start: 0 })
+                    }
+                  >
+                    <SelectTrigger size="sm" className="w-16">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {LIMIT_OPTIONS.map((n) => (
+                        <SelectItem key={n} value={String(n)}>
+                          {n}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <TabsContent value="list">
+                <ul className="grid grid-cols-1 gap-3">
+                  {data.results.map((product) => (
+                    <ProductListItem
+                      key={product.productId}
+                      product={product}
+                    />
+                  ))}
+                </ul>
+              </TabsContent>
+
+              <TabsContent value="card">
+                <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  {data.results.map((product) => (
+                    <ProductCardItem
+                      key={product.productId}
+                      product={product}
+                    />
+                  ))}
+                </ul>
+              </TabsContent>
+
+              {totalPages > 1 && (
+                <Pagination>
+                  <PaginationContent>
+                    <PaginationItem>
+                      <PaginationPrevious
+                        href="#"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          if (params.start > 0)
+                            setParams({
+                              start: Math.max(0, params.start - params.limit),
+                            });
+                        }}
+                        className={cn(
+                          params.start <= 0 && "pointer-events-none opacity-50",
+                        )}
+                      />
+                    </PaginationItem>
+                    <PaginationItem>
+                      <span className="px-3 text-sm text-muted-foreground">
+                        {currentPage} / {totalPages}
+                      </span>
+                    </PaginationItem>
+                    <PaginationItem>
+                      <PaginationNext
+                        href="#"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          if (currentPage < totalPages)
+                            setParams({ start: params.start + params.limit });
+                        }}
+                        className={cn(
+                          currentPage >= totalPages &&
+                            "pointer-events-none opacity-50",
+                        )}
+                      />
+                    </PaginationItem>
+                  </PaginationContent>
+                </Pagination>
+              )}
+            </section>
+          </Tabs>
         )}
       </div>
     </div>
   );
 }
 
-function ProductCard({ product }: { product: ProductAvailability }) {
+function ProductListItem({ product }: { product: ProductAvailability }) {
   return (
-    <li className="flex flex-col gap-3 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex flex-col gap-0.5 min-w-0">
-          <span className="text-sm font-medium text-zinc-900 leading-snug dark:text-zinc-50 truncate">
+    <li className="flex gap-4 rounded-2xl border p-4">
+      <div className="relative h-24 w-24 shrink-0">
+        {product.imageUrl ? (
+          <Image
+            src={product.imageUrl}
+            alt={product.name}
+            fill
+            sizes="96px"
+            className="rounded-xl object-contain"
+          />
+        ) : (
+          <div className="h-full w-full rounded-xl bg-muted" />
+        )}
+        {product.label && (
+          <div className="absolute -bottom-1.5 left-0 right-0 flex justify-center">
+            <LabelBadge label={product.label} />
+          </div>
+        )}
+      </div>
+
+      <div className="flex min-w-0 flex-1 flex-col gap-2.5">
+        <div className="flex items-start justify-between gap-2">
+          <span className="text-sm font-medium leading-snug">
             {product.name}
           </span>
-          {product.price != null && (
-            <span className="text-xs text-zinc-500 dark:text-zinc-400">
-              ₹{product.price}
-              {product.mrp != null && product.mrp !== product.price && (
-                <span className="ml-1 line-through text-zinc-400 dark:text-zinc-600">
-                  ₹{product.mrp}
-                </span>
-              )}
-            </span>
-          )}
+          <AvailabilityBadge available={product.available} />
         </div>
 
-        <AvailabilityBadge available={product.available} />
-      </div>
-
-      <div className="flex items-center justify-between">
-        {product.inventoryQuantity != null && (
-          <span className="text-xs text-zinc-400 dark:text-zinc-600">
-            {product.inventoryQuantity} in stock
-          </span>
+        {product.price != null && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm font-semibold">₹{product.price}</span>
+            {product.mrp != null && product.mrp !== product.price && (
+              <span className="text-xs line-through text-muted-foreground">
+                ₹{product.mrp}
+              </span>
+            )}
+            {product.discount != null && (
+              <DiscountBadge discount={product.discount} />
+            )}
+          </div>
         )}
-        <a
-          href={product.productUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="ml-auto flex items-center gap-1 text-xs font-medium text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50 transition-colors"
-        >
-          View on Amul
-          <ExternalLink className="h-3 w-3" />
-        </a>
+
+        <div className="flex items-center justify-between">
+          {product.inventoryQuantity != null && (
+            <span className="text-xs text-muted-foreground">
+              {product.inventoryQuantity} in stock
+            </span>
+          )}
+          <a
+            href={product.productUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="ml-auto flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+          >
+            View on Amul
+            <ExternalLink className="h-3 w-3" />
+          </a>
+        </div>
       </div>
     </li>
+  );
+}
+
+function ProductCardItem({ product }: { product: ProductAvailability }) {
+  return (
+    <li className="flex flex-col rounded-2xl border overflow-hidden">
+      <div className="relative aspect-square bg-muted">
+        {product.imageUrl && (
+          <Image
+            src={product.imageUrl}
+            alt={product.name}
+            fill
+            sizes="(max-width: 640px) 50vw, 256px"
+            className="object-contain p-3"
+          />
+        )}
+        {product.label && (
+          <div className="absolute top-2 left-2">
+            <LabelBadge label={product.label} />
+          </div>
+        )}
+        {product.discount != null && (
+          <div className="absolute top-2 right-2">
+            <DiscountBadge discount={product.discount} />
+          </div>
+        )}
+      </div>
+
+      <div className="flex flex-col gap-2 p-3">
+        <span className="text-sm font-medium leading-snug">{product.name}</span>
+
+        {product.price != null && (
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-sm font-semibold">₹{product.price}</span>
+            {product.mrp != null && product.mrp !== product.price && (
+              <span className="text-xs line-through text-muted-foreground">
+                ₹{product.mrp}
+              </span>
+            )}
+          </div>
+        )}
+
+        <div className="flex items-center justify-between gap-1">
+          <AvailabilityBadge available={product.available} />
+          <a
+            href={product.productUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-0.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <ExternalLink className="h-3 w-3" />
+          </a>
+        </div>
+      </div>
+    </li>
+  );
+}
+
+function ProductCardSkeleton({ view }: { view: "list" | "card" }) {
+  if (view === "card") {
+    return (
+      <li className="flex flex-col rounded-2xl border overflow-hidden">
+        <Skeleton className="aspect-square" />
+        <div className="flex flex-col gap-2 p-3">
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-2/3" />
+          <Skeleton className="h-3 w-1/3 mt-1" />
+        </div>
+      </li>
+    );
+  }
+
+  return (
+    <li className="flex gap-4 rounded-2xl border p-4">
+      <Skeleton className="h-24 w-24 shrink-0 rounded-xl" />
+      <div className="flex flex-1 flex-col gap-2.5 min-w-0">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex flex-1 flex-col gap-1">
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-3/4" />
+          </div>
+          <Skeleton className="h-5 w-20 shrink-0 rounded-full" />
+        </div>
+        <Skeleton className="h-4 w-1/4" />
+        <div className="flex items-center justify-between">
+          <Skeleton className="h-3 w-16" />
+          <Skeleton className="h-3 w-20" />
+        </div>
+      </div>
+    </li>
+  );
+}
+
+function LabelBadge({
+  label,
+}: {
+  label: NonNullable<ProductAvailability["label"]>;
+}) {
+  return (
+    <span
+      className={cn(
+        "rounded-full px-2 py-0.5 text-xs font-medium",
+        LABEL_STYLES[label],
+      )}
+    >
+      {LABEL_TEXT[label]}
+    </span>
+  );
+}
+
+function DiscountBadge({ discount }: { discount: number }) {
+  return (
+    <span className="rounded-full bg-green-600 px-2 py-0.5 text-xs font-bold text-white">
+      {discount}% off
+    </span>
   );
 }
 
@@ -170,7 +482,7 @@ function AvailabilityBadge({ available }: { available: boolean }) {
         "flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium",
         available
           ? "bg-green-50 text-green-700 dark:bg-green-950/50 dark:text-green-400"
-          : "bg-red-50 text-red-700 dark:bg-red-950/50 dark:text-red-400"
+          : "bg-red-50 text-red-700 dark:bg-red-950/50 dark:text-red-400",
       )}
     >
       {available ? (
