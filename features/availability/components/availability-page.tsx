@@ -1,13 +1,14 @@
 "use client";
 
 import Image from "next/image";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   parseAsInteger,
   parseAsString,
   parseAsStringLiteral,
   useQueryStates,
 } from "nuqs";
+import { useState } from "react";
 import { QUERY_KEYS } from "@/constants/query-keys";
 import {
   Search,
@@ -16,6 +17,8 @@ import {
   ExternalLink,
   LayoutList,
   LayoutGrid,
+  Bell,
+  BellOff,
 } from "lucide-react";
 import {
   InputGroup,
@@ -40,9 +43,18 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
 import { PincodeCombobox } from "./pincode-combobox";
+import { SignInDialog } from "./sign-in-dialog";
+import { authClient } from "@/lib/auth-client";
 
 type AvailabilityResponse = { results: ProductAvailability[]; total: number };
+type SubscriptionRecord = {
+  id: string;
+  productId: string;
+  productName: string;
+  pincode: string;
+};
 
 const LIMIT_OPTIONS = [8, 16, 32];
 const PINCODE_RE = /^\d{6}$/;
@@ -74,6 +86,13 @@ export function AvailabilityPage() {
     view: parseAsStringLiteral(VIEWS).withDefault("list"),
   });
 
+  const [signInOpen, setSignInOpen] = useState(false);
+  const [pendingProduct, setPendingProduct] =
+    useState<ProductAvailability | null>(null);
+
+  const { data: session } = authClient.useSession();
+  const queryClient = useQueryClient();
+
   const hasPincode = PINCODE_RE.test(params.pincode);
 
   const { data, isLoading, isError, error } = useQuery<AvailabilityResponse>({
@@ -95,6 +114,79 @@ export function AvailabilityPage() {
     },
     enabled: hasPincode,
   });
+
+  const { data: subscriptions } = useQuery<SubscriptionRecord[]>({
+    queryKey: QUERY_KEYS.subscriptions({ pincode: params.pincode }),
+    queryFn: async ({ signal }) => {
+      const res = await fetch(
+        `/api/subscriptions?pincode=${params.pincode}`,
+        { signal }
+      );
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: hasPincode && !!session,
+  });
+
+  const subscribedMap = new Map(
+    subscriptions?.map((s) => [s.productId, s.id]) ?? []
+  );
+
+  const subscribeMutation = useMutation({
+    mutationFn: async (product: ProductAvailability) => {
+      const res = await fetch("/api/subscriptions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          productId: product.productId,
+          productName: product.name,
+          pincode: params.pincode,
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to subscribe");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: QUERY_KEYS.subscriptions({ pincode: params.pincode }),
+      });
+    },
+  });
+
+  const unsubscribeMutation = useMutation({
+    mutationFn: async (subscriptionId: string) => {
+      const res = await fetch(`/api/subscriptions/${subscriptionId}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Failed to unsubscribe");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: QUERY_KEYS.subscriptions({ pincode: params.pincode }),
+      });
+    },
+  });
+
+  function handleSubscribeToggle(product: ProductAvailability) {
+    if (!session) {
+      setPendingProduct(product);
+      setSignInOpen(true);
+      return;
+    }
+    const subId = subscribedMap.get(product.productId);
+    if (subId) {
+      unsubscribeMutation.mutate(subId);
+    } else {
+      subscribeMutation.mutate(product);
+    }
+  }
+
+  function handleSignInSuccess() {
+    if (pendingProduct) {
+      subscribeMutation.mutate(pendingProduct);
+      setPendingProduct(null);
+    }
+  }
 
   const total = data?.total ?? 0;
   const totalPages = Math.ceil(total / params.limit);
@@ -231,6 +323,8 @@ export function AvailabilityPage() {
                     <ProductListItem
                       key={product.productId}
                       product={product}
+                      subscriptionId={subscribedMap.get(product.productId)}
+                      onSubscribeToggle={handleSubscribeToggle}
                     />
                   ))}
                 </ul>
@@ -242,6 +336,8 @@ export function AvailabilityPage() {
                     <ProductCardItem
                       key={product.productId}
                       product={product}
+                      subscriptionId={subscribedMap.get(product.productId)}
+                      onSubscribeToggle={handleSubscribeToggle}
                     />
                   ))}
                 </ul>
@@ -291,11 +387,30 @@ export function AvailabilityPage() {
           </Tabs>
         )}
       </div>
+
+      <SignInDialog
+        open={signInOpen}
+        onOpenChange={(open) => {
+          setSignInOpen(open);
+          if (!open) setPendingProduct(null);
+        }}
+        onSuccess={handleSignInSuccess}
+      />
     </div>
   );
 }
 
-function ProductListItem({ product }: { product: ProductAvailability }) {
+type ProductItemProps = {
+  product: ProductAvailability;
+  subscriptionId: string | undefined;
+  onSubscribeToggle: (product: ProductAvailability) => void;
+};
+
+function ProductListItem({
+  product,
+  subscriptionId,
+  onSubscribeToggle,
+}: ProductItemProps) {
   return (
     <li className="flex gap-4 rounded-2xl border p-4">
       <div className="relative h-24 w-24 shrink-0">
@@ -345,22 +460,32 @@ function ProductListItem({ product }: { product: ProductAvailability }) {
               {product.inventoryQuantity} in stock
             </span>
           )}
-          <a
-            href={product.productUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="ml-auto flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-          >
-            View on Amul
-            <ExternalLink className="h-3 w-3" />
-          </a>
+          <div className="ml-auto flex items-center gap-2">
+            <SubscribeButton
+              subscriptionId={subscriptionId}
+              onToggle={() => onSubscribeToggle(product)}
+            />
+            <a
+              href={product.productUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+            >
+              View on Amul
+              <ExternalLink className="h-3 w-3" />
+            </a>
+          </div>
         </div>
       </div>
     </li>
   );
 }
 
-function ProductCardItem({ product }: { product: ProductAvailability }) {
+function ProductCardItem({
+  product,
+  subscriptionId,
+  onSubscribeToggle,
+}: ProductItemProps) {
   return (
     <li className="flex flex-col rounded-2xl border overflow-hidden">
       <div className="relative aspect-square bg-muted">
@@ -401,17 +526,52 @@ function ProductCardItem({ product }: { product: ProductAvailability }) {
 
         <div className="flex items-center justify-between gap-1">
           <AvailabilityBadge available={product.available} />
-          <a
-            href={product.productUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-0.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <ExternalLink className="h-3 w-3" />
-          </a>
+          <div className="flex items-center gap-1">
+            <SubscribeButton
+              subscriptionId={subscriptionId}
+              onToggle={() => onSubscribeToggle(product)}
+            />
+            <a
+              href={product.productUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-0.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <ExternalLink className="h-3 w-3" />
+            </a>
+          </div>
         </div>
       </div>
     </li>
+  );
+}
+
+function SubscribeButton({
+  subscriptionId,
+  onToggle,
+}: {
+  subscriptionId: string | undefined;
+  onToggle: () => void;
+}) {
+  const subscribed = !!subscriptionId;
+  return (
+    <Button
+      variant="ghost"
+      size="icon-xs"
+      onClick={onToggle}
+      title={subscribed ? "Unsubscribe from alerts" : "Subscribe to alerts"}
+      className={cn(
+        subscribed
+          ? "text-amber-500 hover:text-amber-600"
+          : "text-muted-foreground hover:text-foreground",
+      )}
+    >
+      {subscribed ? (
+        <BellOff className="h-3.5 w-3.5" />
+      ) : (
+        <Bell className="h-3.5 w-3.5" />
+      )}
+    </Button>
   );
 }
 

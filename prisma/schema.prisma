@@ -6,3 +6,98 @@ datasource db {
     provider = "mongodb"
     url      = env("DATABASE_URL")
 }
+
+model User {
+    id                String             @id @map("_id")
+    name              String
+    email             String
+    emailVerified     Boolean            @default(false)
+    image             String?
+    createdAt         DateTime           @default(now())
+    updatedAt         DateTime           @updatedAt
+    sessions          Session[]
+    accounts          Account[]
+    subscriptions     Subscription[]
+    pushSubscriptions PushSubscription[]
+
+    @@unique([email])
+    @@map("user")
+}
+
+model Subscription {
+    id            String    @id @default(auto()) @map("_id") @db.ObjectId
+    userId        String
+    user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+    productId     String
+    productName   String
+    pincode       String
+    lastAvailable Boolean?
+    createdAt     DateTime  @default(now())
+    updatedAt     DateTime  @updatedAt
+
+    @@unique([userId, productId, pincode])
+    @@index([userId])
+    @@map("subscription")
+}
+
+model PushSubscription {
+    id        String   @id @default(auto()) @map("_id") @db.ObjectId
+    userId    String
+    user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+    endpoint  String   @unique
+    p256dh    String
+    auth      String
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@index([userId])
+    @@map("push_subscription")
+}
+
+model Session {
+    id        String   @id @map("_id")
+    expiresAt DateTime
+    token     String
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+    ipAddress String?
+    userAgent String?
+    userId    String
+    user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    @@unique([token])
+    @@index([userId])
+    @@map("session")
+}
+
+model Account {
+    id                    String    @id @map("_id")
+    accountId             String
+    providerId            String
+    userId                String
+    user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+    accessToken           String?
+    refreshToken          String?
+    idToken               String?
+    accessTokenExpiresAt  DateTime?
+    refreshTokenExpiresAt DateTime?
+    scope                 String?
+    password              String?
+    createdAt             DateTime  @default(now())
+    updatedAt             DateTime  @updatedAt
+
+    @@index([userId])
+    @@map("account")
+}
+
+model Verification {
+    id         String   @id @map("_id")
+    identifier String
+    value      String
+    expiresAt  DateTime
+    createdAt  DateTime @default(now())
+    updatedAt  DateTime @updatedAt
+
+    @@index([identifier])
+    @@map("verification")
+}

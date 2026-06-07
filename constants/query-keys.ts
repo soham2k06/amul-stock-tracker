@@ -7,4 +7,9 @@ export const QUERY_KEYS = {
   }) => ["availability", params] as const,
 
   pincodes: (q: string) => ["pincodes", { q }] as const,
+
+  subscriptions: (params: { pincode: string }) =>
+    ["subscriptions", params] as const,
+
+  allSubscriptions: () => ["subscriptions", "all"] as const,
 };

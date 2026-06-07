@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { AvailabilityPage } from "@/features/availability/components/availability-page";
 
 export const metadata: Metadata = {
-  title: "Amul Stock Tracker",
+  title: "Amul Stock Notifier",
 };
 
 export default function Home() {
