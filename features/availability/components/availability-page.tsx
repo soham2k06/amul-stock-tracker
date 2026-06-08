@@ -118,10 +118,9 @@ export function AvailabilityPage() {
   const { data: subscriptions } = useQuery<SubscriptionRecord[]>({
     queryKey: QUERY_KEYS.subscriptions({ pincode: params.pincode }),
     queryFn: async ({ signal }) => {
-      const res = await fetch(
-        `/api/subscriptions?pincode=${params.pincode}`,
-        { signal }
-      );
+      const res = await fetch(`/api/subscriptions?pincode=${params.pincode}`, {
+        signal,
+      });
       if (!res.ok) return [];
       return res.json();
     },
@@ -129,7 +128,7 @@ export function AvailabilityPage() {
   });
 
   const subscribedMap = new Map(
-    subscriptions?.map((s) => [s.productId, s.id]) ?? []
+    subscriptions?.map((s) => [s.productId, s.id]) ?? [],
   );
 
   const subscribeMutation = useMutation({

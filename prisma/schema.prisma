@@ -8,17 +8,18 @@ datasource db {
 }
 
 model User {
-    id                String             @id @map("_id")
-    name              String
-    email             String
-    emailVerified     Boolean            @default(false)
-    image             String?
-    createdAt         DateTime           @default(now())
-    updatedAt         DateTime           @updatedAt
-    sessions          Session[]
-    accounts          Account[]
-    subscriptions     Subscription[]
-    pushSubscriptions PushSubscription[]
+    id                  String               @id @map("_id")
+    name                String
+    email               String
+    emailVerified       Boolean              @default(false)
+    image               String?
+    createdAt           DateTime             @default(now())
+    updatedAt           DateTime             @updatedAt
+    sessions            Session[]
+    accounts            Account[]
+    subscriptions       Subscription[]
+    pushSubscriptions   PushSubscription[]
+    telegramConnection  TelegramConnection?
 
     @@unique([email])
     @@map("user")
@@ -100,4 +101,26 @@ model Verification {
 
     @@index([identifier])
     @@map("verification")
+}
+
+model TelegramConnection {
+    id        String   @id @default(auto()) @map("_id") @db.ObjectId
+    userId    String   @unique
+    user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+    chatId    String   @unique
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@map("telegram_connection")
+}
+
+model TelegramToken {
+    id        String   @id @default(auto()) @map("_id") @db.ObjectId
+    userId    String
+    token     String   @unique
+    expiresAt DateTime
+    createdAt DateTime @default(now())
+
+    @@index([userId])
+    @@map("telegram_token")
 }

@@ -13,6 +13,7 @@
     "@base-ui/react": "^1.5.0",
     "@prisma/client": "^6.19.3",
     "@tanstack/react-query": "^5.101.0",
+    "@vercel/analytics": "^2.0.1",
     "axios": "^1.17.0",
     "axios-cookiejar-support": "^7.0.0",
     "better-auth": "^1.6.14",

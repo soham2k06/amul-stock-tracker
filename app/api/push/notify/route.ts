@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendPushNotification } from "@/lib/webpush";
+import { sendTelegramMessage } from "@/lib/telegram";
 import { searchAmulProducts } from "@/lib/amul/client";
 
 // Called by a cron job. Protect with NOTIFY_SECRET env var.
@@ -12,7 +13,7 @@ export async function POST(request: NextRequest) {
 
   const subscriptions = await prisma.subscription.findMany({
     include: {
-      user: { include: { pushSubscriptions: true } },
+      user: { include: { pushSubscriptions: true, telegramConnection: true } },
     },
   });
 
@@ -48,7 +49,7 @@ export async function POST(request: NextRequest) {
 
       const cameBackInStock = nowAvailable && sub.lastAvailable === false;
 
-      if (cameBackInStock && sub.user.pushSubscriptions.length > 0) {
+      if (cameBackInStock) {
         for (const pushSub of sub.user.pushSubscriptions) {
           const result = await sendPushNotification(pushSub, {
             title: "Back in stock!",
@@ -62,6 +63,14 @@ export async function POST(request: NextRequest) {
           } else {
             notified++;
           }
+        }
+
+        if (sub.user.telegramConnection) {
+          await sendTelegramMessage(
+            sub.user.telegramConnection.chatId,
+            `Back in stock! ${sub.productName} is now available in ${pincode}.`,
+          ).catch(() => null);
+          notified++;
         }
       }
 

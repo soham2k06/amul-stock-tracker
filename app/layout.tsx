@@ -5,6 +5,7 @@ import "./globals.css";
 import { cn } from "@/lib/utils";
 import { QueryProvider } from "./query-provider";
 import { Navbar } from "@/components/navbar";
+import { Analytics } from "@vercel/analytics/next";
 import { ServiceWorkerRegistrar } from "@/components/service-worker-registrar";
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
@@ -49,6 +50,7 @@ export default function RootLayout({
             {children}
           </NuqsAdapter>
         </QueryProvider>
+        <Analytics />
       </body>
     </html>
   );

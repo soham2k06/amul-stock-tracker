@@ -12,4 +12,6 @@ export const QUERY_KEYS = {
     ["subscriptions", params] as const,
 
   allSubscriptions: () => ["subscriptions", "all"] as const,
+
+  telegramStatus: () => ["telegram", "status"] as const,
 };

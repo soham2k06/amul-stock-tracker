@@ -7,9 +7,12 @@ import { QUERY_KEYS } from "@/constants/query-keys";
 import {
   Bell,
   BellOff,
+  CheckCheck,
+  Copy,
   ExternalLink,
   FlaskConical,
   MapPin,
+  Send,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -88,6 +91,7 @@ export function SubscriptionsPage() {
   return (
     <PageShell>
       <PushNotificationPanel />
+      <TelegramPanel />
 
       {pincodes.length === 0 ? (
         <div className="rounded-2xl border border-dashed p-10 text-center">
@@ -257,14 +261,224 @@ function PushNotificationPanel() {
           </Button>
         </div>
       </div>
+    </div>
+  );
+}
+
+type PendingToken = { token: string; botUsername: string };
+
+function TelegramPanel() {
+  const queryClient = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  const [pending, setPending] = useState<PendingToken | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [testResult, setTestResult] = useState<string | null>(null);
+
+  const { data, isLoading } = useQuery<{ connected: boolean }>({
+    queryKey: QUERY_KEYS.telegramStatus(),
+    queryFn: async ({ signal }) => {
+      const res = await fetch("/api/telegram/status", { signal });
+      if (!res.ok) return { connected: false };
+      return res.json();
+    },
+  });
+
+  const connected = data?.connected ?? false;
+
+  async function handleConnect() {
+    setBusy(true);
+    setTestResult(null);
+    try {
+      const res = await fetch("/api/telegram/token", { method: "POST" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Failed to generate token");
+
+      const { token, botUsername } = json as PendingToken;
+      setPending({ token, botUsername });
+      setBusy(false);
+
+      // Poll until the webhook confirms connection
+      const poll = setInterval(async () => {
+        const statusRes = await fetch("/api/telegram/status");
+        const status = await statusRes.json();
+        if (status.connected) {
+          clearInterval(poll);
+          setPending(null);
+          queryClient.invalidateQueries({
+            queryKey: QUERY_KEYS.telegramStatus(),
+          });
+        }
+      }, 2000);
+
+      // Expire after 15 minutes (matches token TTL)
+      setTimeout(() => {
+        clearInterval(poll);
+        setPending(null);
+      }, 15 * 60 * 1000);
+    } catch (err) {
+      setTestResult(
+        err instanceof Error ? err.message : "Something went wrong",
+      );
+      setBusy(false);
+    }
+  }
+
+  function handleCancelPending() {
+    setPending(null);
+    setBusy(false);
+  }
+
+  async function handleCopy(command: string) {
+    await navigator.clipboard.writeText(command);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  async function handleDisconnect() {
+    setBusy(true);
+    setTestResult(null);
+    try {
+      await fetch("/api/telegram/disconnect", { method: "DELETE" });
+      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.telegramStatus() });
+    } catch (err) {
+      setTestResult(
+        err instanceof Error ? err.message : "Something went wrong",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleTest() {
+    setBusy(true);
+    setTestResult(null);
+    try {
+      const res = await fetch("/api/telegram/test", { method: "POST" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Failed to send test");
+      setTestResult("Test message sent to Telegram.");
+    } catch (err) {
+      setTestResult(err instanceof Error ? err.message : "Failed to send test");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (isLoading) return null;
+
+  const startCommand = pending ? `/start ${pending.token}` : "";
+
+  return (
+    <div className="rounded-2xl border px-4 py-3 flex flex-col gap-3">
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex flex-col gap-0.5">
+          <p className="text-sm font-medium">Telegram notifications</p>
+          <p className="text-xs text-muted-foreground">
+            {connected
+              ? "Your Telegram account is linked. You'll receive messages when subscribed products come back in stock."
+              : pending
+                ? "Waiting for you to connect in Telegram..."
+                : "Connect Telegram to receive stock alerts as messages."}
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          {connected && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleTest}
+              disabled={busy}
+              className="gap-1.5"
+            >
+              <FlaskConical className="h-3.5 w-3.5" />
+              Test
+            </Button>
+          )}
+          {pending ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleCancelPending}
+              className="gap-1.5 text-muted-foreground"
+            >
+              <X className="h-3.5 w-3.5" />
+              Cancel
+            </Button>
+          ) : (
+            <Button
+              variant={connected ? "outline" : "default"}
+              size="sm"
+              onClick={connected ? handleDisconnect : handleConnect}
+              disabled={busy}
+              className={cn(
+                "gap-1.5",
+                connected && "text-destructive hover:text-destructive",
+              )}
+            >
+              {connected ? (
+                <>
+                  <X className="h-3.5 w-3.5" />
+                  Disconnect
+                </>
+              ) : (
+                <>
+                  <Send className="h-3.5 w-3.5" />
+                  Connect
+                </>
+              )}
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {pending && (
+        <div className="flex flex-col gap-3 rounded-xl bg-muted/50 px-3 py-3">
+          <div className="flex flex-col gap-1">
+            <p className="text-xs font-medium">
+              Step 1 - Open the bot in Telegram
+            </p>
+            <a
+              href={`https://t.me/${pending.botUsername}`}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex w-fit items-center gap-1.5 text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+            >
+              <ExternalLink className="h-3 w-3" />
+              @{pending.botUsername}
+            </a>
+          </div>
+          <div className="flex flex-col gap-1">
+            <p className="text-xs font-medium">
+              Step 2 - Copy and send this command to the bot
+            </p>
+            <div className="flex items-center gap-2">
+              <code className="flex-1 rounded-md border bg-background px-2.5 py-1.5 font-mono text-xs">
+                {startCommand}
+              </code>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleCopy(startCommand)}
+                className="shrink-0 gap-1.5"
+              >
+                {copied ? (
+                  <CheckCheck className="h-3.5 w-3.5 text-green-500" />
+                ) : (
+                  <Copy className="h-3.5 w-3.5" />
+                )}
+                {copied ? "Copied" : "Copy"}
+              </Button>
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Waiting for confirmation...
+          </p>
+        </div>
+      )}
 
       {testResult && (
-        <div className="flex items-center justify-between gap-2 rounded-xl bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
-          <span>{testResult}</span>
-          <button onClick={() => setTestResult(null)}>
-            <X className="h-3 w-3" />
-          </button>
-        </div>
+        <p className="text-xs text-muted-foreground">{testResult}</p>
       )}
     </div>
   );
