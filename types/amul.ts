@@ -34,6 +34,24 @@ export type AmulProduct = {
   discounts?: Array<{ discount_type?: string; discount_value?: number }>;
 };
 
+export type AmulCoupon = {
+  _id: string;
+  coupon_code: string;
+  name: string;
+  description?: string;
+  type: string;
+  amount: number;
+  maximum_discount?: number;
+  end_date?: string;
+  enabled: string;
+  visible_on_frontend: string;
+};
+
+export type AmulCouponsResponse = {
+  records: AmulCoupon[];
+  total: number;
+};
+
 export type AmulProductsResponse = {
   data: AmulProduct[];
   paging: {

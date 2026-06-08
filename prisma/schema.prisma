@@ -13,6 +13,7 @@ model User {
     email               String
     emailVerified       Boolean              @default(false)
     image               String?
+    pincode             String?
     createdAt           DateTime             @default(now())
     updatedAt           DateTime             @updatedAt
     sessions            Session[]
@@ -33,6 +34,7 @@ model Subscription {
     productName   String
     pincode       String
     lastAvailable Boolean?
+    lastLowStock  Boolean?
     createdAt     DateTime  @default(now())
     updatedAt     DateTime  @updatedAt
 

@@ -4,6 +4,8 @@ import { sendPushNotification } from "@/lib/webpush";
 import { sendTelegramMessage } from "@/lib/telegram";
 import { searchAmulProducts } from "@/lib/amul/client";
 
+const LOW_STOCK_THRESHOLD = 5;
+
 // Called by a cron job. Protect with NOTIFY_SECRET env var.
 export async function POST(request: NextRequest) {
   const secret = request.headers.get("x-notify-secret");
@@ -32,34 +34,42 @@ export async function POST(request: NextRequest) {
   let notified = 0;
 
   for (const [pincode, subs] of byPincode) {
-    // Fetch enough products to cover all subscriptions for this pincode
     const result = await searchAmulProducts(pincode, undefined, {
       start: 0,
       limit: 100,
     });
     if (!result.ok) continue;
 
-    const availableById = new Map(
-      result.results.map((p) => [p.productId, p.available])
-    );
+    const productById = new Map(result.results.map((p) => [p.productId, p]));
 
     for (const sub of subs) {
-      const nowAvailable = availableById.get(sub.productId);
-      if (nowAvailable === undefined) continue;
+      const product = productById.get(sub.productId);
+      if (!product) continue;
 
-      const cameBackInStock = nowAvailable && sub.lastAvailable === false;
+      const { available, inventoryQuantity } = product;
+      const isLowStock =
+        available &&
+        inventoryQuantity !== undefined &&
+        inventoryQuantity > 0 &&
+        inventoryQuantity <= LOW_STOCK_THRESHOLD;
+
+      const cameBackInStock = available && sub.lastAvailable === false;
+      const droppedToLowStock = isLowStock && !sub.lastLowStock && !cameBackInStock;
+
+      const qtyNote =
+        isLowStock && inventoryQuantity !== undefined
+          ? ` Only ${inventoryQuantity} left!`
+          : "";
 
       if (cameBackInStock) {
+        const title = "Back in stock!";
+        const body = `${sub.productName} is now available in ${pincode}.${qtyNote}`;
+        const url = `/?pincode=${pincode}`;
+
         for (const pushSub of sub.user.pushSubscriptions) {
-          const result = await sendPushNotification(pushSub, {
-            title: "Back in stock!",
-            body: `${sub.productName} is now available in ${pincode}`,
-            url: `/?pincode=${pincode}`,
-          });
-          if (result === "expired") {
-            await prisma.pushSubscription.delete({
-              where: { id: pushSub.id },
-            });
+          const res = await sendPushNotification(pushSub, { title, body, url });
+          if (res === "expired") {
+            await prisma.pushSubscription.delete({ where: { id: pushSub.id } });
           } else {
             notified++;
           }
@@ -68,7 +78,28 @@ export async function POST(request: NextRequest) {
         if (sub.user.telegramConnection) {
           await sendTelegramMessage(
             sub.user.telegramConnection.chatId,
-            `Back in stock! ${sub.productName} is now available in ${pincode}.`,
+            `${title} ${body}`,
+          ).catch(() => null);
+          notified++;
+        }
+      } else if (droppedToLowStock) {
+        const title = "Low stock alert!";
+        const body = `Only ${inventoryQuantity} of ${sub.productName} left in ${pincode}.`;
+        const url = `/?pincode=${pincode}`;
+
+        for (const pushSub of sub.user.pushSubscriptions) {
+          const res = await sendPushNotification(pushSub, { title, body, url });
+          if (res === "expired") {
+            await prisma.pushSubscription.delete({ where: { id: pushSub.id } });
+          } else {
+            notified++;
+          }
+        }
+
+        if (sub.user.telegramConnection) {
+          await sendTelegramMessage(
+            sub.user.telegramConnection.chatId,
+            `${title} ${body}`,
           ).catch(() => null);
           notified++;
         }
@@ -76,7 +107,7 @@ export async function POST(request: NextRequest) {
 
       await prisma.subscription.update({
         where: { id: sub.id },
-        data: { lastAvailable: nowAvailable },
+        data: { lastAvailable: available, lastLowStock: isLowStock },
       });
     }
   }

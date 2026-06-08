@@ -1,5 +1,7 @@
 import { STORE_ID, SUBSTORES } from "@/lib/constants";
 import type {
+  AmulCoupon,
+  AmulCouponsResponse,
   AmulPincodeResponse,
   AmulProduct,
   AmulProductsResponse,
@@ -200,7 +202,8 @@ export class AmulApi {
     return `${timestamp}:${rand}:${hash}`;
   }
 
-  private getProteinProductsUrl(opts: {
+  private getProductsUrl(opts: {
+    category: string;
     substoreId?: string;
     limit?: number;
     start?: number;
@@ -210,7 +213,7 @@ export class AmulApi {
       params.append(`fields[${field}]`, "1");
     }
     params.append("filters[0][field]", "categories");
-    params.append("filters[0][value][0]", "protein");
+    params.append("filters[0][value][0]", opts.category);
     params.append("filters[0][operator]", "in");
     params.append("filters[0][original]", "1");
     params.append("facets", "true");
@@ -225,25 +228,22 @@ export class AmulApi {
     return `https://shop.amul.com/api/1/entity/ms.products?${query}`;
   }
 
-  public async getProteinProducts(opts?: {
-    search?: string;
+  public async getProducts(opts?: {
+    category?: string;
     limit?: number;
     start?: number;
   }): Promise<{ data: AmulProduct[]; total: number }> {
     const versionPromise = this.ensureStoreVersion();
     const substoreId = this.getSubstoreId();
+    const category = opts?.category ?? "protein";
     await versionPromise;
 
     const response = await this.amulApi.get<AmulProductsResponse>(
-      this.getProteinProductsUrl({
-        substoreId,
-        limit: opts?.limit,
-        start: opts?.start,
-      }),
+      this.getProductsUrl({ category, substoreId, limit: opts?.limit, start: opts?.start }),
       {
         headers: {
           ...defaultHeaders,
-          referer: "https://shop.amul.com/en/browse/protein",
+          referer: `https://shop.amul.com/en/browse/${category}`,
           cookie: await this.jar.getCookieString("https://shop.amul.com"),
           tid: await this.buildTidHeader(),
         },
@@ -252,15 +252,27 @@ export class AmulApi {
     const products = response.data.data ?? [];
     const total = response.data.paging?.total ?? products.length;
 
-    if (opts?.search) {
-      const re = new RegExp(opts.search.split("").join(".*?"), "i");
-      const filtered = products.filter(
-        (p) => re.test(p.name) || re.test(p.sku ?? "") || re.test(p.alias),
-      );
-      return { data: filtered, total };
-    }
-
     return { data: products, total };
+  }
+
+  public async getCoupons(): Promise<AmulCoupon[]> {
+    const response = await this.amulApi.get<AmulCouponsResponse>(
+      "https://shop.amul.com/entity/ms.carts/_/listCoupons",
+      {
+        headers: {
+          ...defaultHeaders,
+          tid: await this.buildTidHeader(),
+          cookie: await this.jar.getCookieString("https://shop.amul.com"),
+        },
+      },
+    );
+    const now = new Date();
+    return (response.data.records ?? []).filter(
+      (c) =>
+        c.enabled === "1" &&
+        c.visible_on_frontend === "1" &&
+        (!c.end_date || new Date(c.end_date) > now),
+    );
   }
 
   public close() {

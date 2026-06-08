@@ -1,6 +1,7 @@
 export const QUERY_KEYS = {
   availability: (params: {
     pincode: string;
+    category: string;
     q?: string;
     start: number;
     limit: number;
@@ -14,4 +15,6 @@ export const QUERY_KEYS = {
   allSubscriptions: () => ["subscriptions", "all"] as const,
 
   telegramStatus: () => ["telegram", "status"] as const,
+
+  coupons: () => ["coupons"] as const,
 };

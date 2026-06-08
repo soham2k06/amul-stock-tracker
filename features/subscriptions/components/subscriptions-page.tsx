@@ -311,10 +311,13 @@ function TelegramPanel() {
       }, 2000);
 
       // Expire after 15 minutes (matches token TTL)
-      setTimeout(() => {
-        clearInterval(poll);
-        setPending(null);
-      }, 15 * 60 * 1000);
+      setTimeout(
+        () => {
+          clearInterval(poll);
+          setPending(null);
+        },
+        15 * 60 * 1000,
+      );
     } catch (err) {
       setTestResult(
         err instanceof Error ? err.message : "Something went wrong",
@@ -370,7 +373,7 @@ function TelegramPanel() {
 
   return (
     <div className="rounded-2xl border px-4 py-3 flex flex-col gap-3">
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex flex-col gap-0.5">
           <p className="text-sm font-medium">Telegram notifications</p>
           <p className="text-xs text-muted-foreground">
@@ -444,16 +447,15 @@ function TelegramPanel() {
               rel="noreferrer"
               className="inline-flex w-fit items-center gap-1.5 text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
             >
-              <ExternalLink className="h-3 w-3" />
-              @{pending.botUsername}
+              <ExternalLink className="h-3 w-3" />@{pending.botUsername}
             </a>
           </div>
           <div className="flex flex-col gap-1">
             <p className="text-xs font-medium">
               Step 2 - Copy and send this command to the bot
             </p>
-            <div className="flex items-center gap-2">
-              <code className="flex-1 rounded-md border bg-background px-2.5 py-1.5 font-mono text-xs">
+            <div className="flex flex-col md:flex-row md:items-center gap-2">
+              <code className="flex-1 rounded-md border bg-background px-2.5 py-1.5 font-mono text-xs break-all">
                 {startCommand}
               </code>
               <Button

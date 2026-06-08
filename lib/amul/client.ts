@@ -7,9 +7,7 @@ export const getSubstores = async () => {
   return SUBSTORES;
 };
 
-function deriveLabel(
-  product: AmulProduct,
-): ProductAvailability["label"] {
+function deriveLabel(product: AmulProduct): ProductAvailability["label"] {
   const raw = String(
     product.metafields?.label ?? product.metafields?.badge ?? "",
   ).toLowerCase();
@@ -59,7 +57,7 @@ function toProductAvailability(
     mrp: product.compare_price ?? product.original_price,
     discount: deriveDiscount(product),
     label: deriveLabel(product),
-    productUrl: `https://shop.amul.com/p/${product.alias}`,
+    productUrl: `https://shop.amul.com/product/${product.alias}`,
     source: "amul",
   };
 }
@@ -72,18 +70,15 @@ export type SearchResult =
       message: string;
     };
 
+const FETCH_ALL_LIMIT = 200;
+
 export async function searchAmulProducts(
   pincode: string,
   query?: string,
-  opts?: { limit?: number; start?: number },
+  opts?: { category?: string; limit?: number; start?: number },
 ): Promise<SearchResult> {
   try {
     const api = await createAmulApi(pincode);
-    const { data: products, total } = await api.getProteinProducts({
-      search: query,
-      limit: opts?.limit,
-      start: opts?.start,
-    });
 
     const substoreAlias = api.getSubstoreAlias();
     const substoreId = api.getSubstoreId();
@@ -94,6 +89,30 @@ export async function searchAmulProducts(
         error: "SUBSTORE_NOT_FOUND",
         message: `Substore not found for pincode ${pincode}`,
       };
+    }
+
+    const category = opts?.category ?? "protein";
+    let products: AmulProduct[];
+    let total: number;
+
+    if (query) {
+      // Fetch all products, filter, then paginate so that total and
+      // page offsets reflect the filtered set rather than Amul's full count.
+      const res = await api.getProducts({ category, limit: FETCH_ALL_LIMIT, start: 0 });
+      const q = query.toLowerCase();
+      const filtered = res.data.filter(
+        (p) =>
+          p.name.toLowerCase().includes(q) ||
+          p.alias.toLowerCase().includes(q),
+      );
+      total = filtered.length;
+      const start = opts?.start ?? 0;
+      const limit = opts?.limit ?? 8;
+      products = filtered.slice(start, start + limit);
+    } else {
+      const res = await api.getProducts({ category, limit: opts?.limit, start: opts?.start });
+      products = res.data;
+      total = res.total;
     }
 
     const results = products.map((p) =>

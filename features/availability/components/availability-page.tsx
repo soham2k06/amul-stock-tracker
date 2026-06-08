@@ -8,7 +8,7 @@ import {
   parseAsStringLiteral,
   useQueryStates,
 } from "nuqs";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { QUERY_KEYS } from "@/constants/query-keys";
 import {
   Search,
@@ -19,6 +19,7 @@ import {
   LayoutGrid,
   Bell,
   BellOff,
+  Loader2,
 } from "lucide-react";
 import {
   InputGroup,
@@ -27,6 +28,7 @@ import {
 } from "@/components/ui/input-group";
 import { cn } from "@/lib/utils";
 import type { ProductAvailability } from "@/types/amul";
+import { CATEGORIES } from "@/lib/constants";
 import {
   Pagination,
   PaginationContent,
@@ -46,6 +48,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { PincodeCombobox } from "./pincode-combobox";
 import { SignInDialog } from "./sign-in-dialog";
+import { CouponsBanner } from "./coupons-banner";
 import { authClient } from "@/lib/auth-client";
 
 type AvailabilityResponse = { results: ProductAvailability[]; total: number };
@@ -78,8 +81,14 @@ const LABEL_TEXT: Record<NonNullable<ProductAvailability["label"]>, string> = {
 };
 
 export function AvailabilityPage() {
+  const categoryAliases = CATEGORIES.map((c) => c.alias) as [
+    string,
+    ...string[],
+  ];
+
   const [params, setParams] = useQueryStates({
     pincode: parseAsString.withDefault(""),
+    category: parseAsStringLiteral(categoryAliases).withDefault("protein"),
     q: parseAsString.withDefault(""),
     start: parseAsInteger.withDefault(0),
     limit: parseAsInteger.withDefault(8),
@@ -93,17 +102,54 @@ export function AvailabilityPage() {
   const { data: session } = authClient.useSession();
   const queryClient = useQueryClient();
 
+  const didAutoFill = useRef(false);
+  useEffect(() => {
+    if (didAutoFill.current) return;
+    if (!session?.user?.pincode) return;
+    if (params.pincode) return;
+    didAutoFill.current = true;
+    setParams({ pincode: session.user.pincode, start: 0 });
+  }, [session, params.pincode, setParams]);
+
+  const [searchInput, setSearchInput] = useState(params.q);
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  function handleSearchChange(val: string) {
+    setSearchInput(val);
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    searchDebounceRef.current = setTimeout(() => {
+      setParams({ q: val, start: 0 });
+    }, 400);
+  }
+
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  function handlePincodeChange(val: string) {
+    setParams({ pincode: val, start: 0 });
+    if (!session) return;
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    saveTimeoutRef.current = setTimeout(() => {
+      fetch("/api/user/pincode", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pincode: val || null }),
+      }).catch(() => {});
+    }, 600);
+  }
+
   const hasPincode = PINCODE_RE.test(params.pincode);
 
   const { data, isLoading, isError, error } = useQuery<AvailabilityResponse>({
     queryKey: QUERY_KEYS.availability({
       pincode: params.pincode,
+      category: params.category,
       q: params.q,
       start: params.start,
       limit: params.limit,
     }),
     queryFn: async ({ signal }) => {
-      const sp = new URLSearchParams({ pincode: params.pincode });
+      const sp = new URLSearchParams({
+        pincode: params.pincode,
+        category: params.category,
+      });
       if (params.q) sp.set("q", params.q);
       sp.set("start", String(params.start));
       sp.set("limit", String(params.limit));
@@ -131,6 +177,10 @@ export function AvailabilityPage() {
     subscriptions?.map((s) => [s.productId, s.id]) ?? [],
   );
 
+  const [mutatingProductId, setMutatingProductId] = useState<string | null>(
+    null,
+  );
+
   const subscribeMutation = useMutation({
     mutationFn: async (product: ProductAvailability) => {
       const res = await fetch("/api/subscriptions", {
@@ -145,6 +195,7 @@ export function AvailabilityPage() {
       if (!res.ok) throw new Error("Failed to subscribe");
       return res.json();
     },
+    onSettled: () => setMutatingProductId(null),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: QUERY_KEYS.subscriptions({ pincode: params.pincode }),
@@ -159,6 +210,7 @@ export function AvailabilityPage() {
       });
       if (!res.ok) throw new Error("Failed to unsubscribe");
     },
+    onSettled: () => setMutatingProductId(null),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: QUERY_KEYS.subscriptions({ pincode: params.pincode }),
@@ -172,6 +224,7 @@ export function AvailabilityPage() {
       setSignInOpen(true);
       return;
     }
+    setMutatingProductId(product.productId);
     const subId = subscribedMap.get(product.productId);
     if (subId) {
       unsubscribeMutation.mutate(subId);
@@ -203,6 +256,8 @@ export function AvailabilityPage() {
           </p>
         </header>
 
+        <CouponsBanner />
+
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
           <div className="flex flex-col gap-1.5 sm:w-64">
             <label
@@ -213,8 +268,38 @@ export function AvailabilityPage() {
             </label>
             <PincodeCombobox
               value={params.pincode}
-              onChange={(val) => setParams({ pincode: val, start: 0 })}
+              onChange={handlePincodeChange}
             />
+          </div>
+
+          <div className="flex flex-col gap-1.5 sm:w-52 w-full">
+            <label className="text-sm font-medium text-muted-foreground">
+              Category
+            </label>
+            <Select
+              value={params.category}
+              onValueChange={(val) => {
+                setSearchInput("");
+                setParams({
+                  category: val as typeof params.category,
+                  start: 0,
+                  q: "",
+                });
+              }}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue>
+                  {CATEGORIES.find((c) => c.alias === params.category)?.name}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {CATEGORIES.map((c) => (
+                  <SelectItem key={c.alias} value={c.alias}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           {hasPincode && (
@@ -225,9 +310,9 @@ export function AvailabilityPage() {
               <InputGroupInput
                 type="text"
                 placeholder="Search products..."
-                value={params.q}
+                value={searchInput}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                  setParams({ q: e.target.value, start: 0 })
+                  handleSearchChange(e.target.value)
                 }
               />
             </InputGroup>
@@ -323,6 +408,7 @@ export function AvailabilityPage() {
                       key={product.productId}
                       product={product}
                       subscriptionId={subscribedMap.get(product.productId)}
+                      loading={mutatingProductId === product.productId}
                       onSubscribeToggle={handleSubscribeToggle}
                     />
                   ))}
@@ -336,6 +422,7 @@ export function AvailabilityPage() {
                       key={product.productId}
                       product={product}
                       subscriptionId={subscribedMap.get(product.productId)}
+                      loading={mutatingProductId === product.productId}
                       onSubscribeToggle={handleSubscribeToggle}
                     />
                   ))}
@@ -402,12 +489,14 @@ export function AvailabilityPage() {
 type ProductItemProps = {
   product: ProductAvailability;
   subscriptionId: string | undefined;
+  loading: boolean;
   onSubscribeToggle: (product: ProductAvailability) => void;
 };
 
 function ProductListItem({
   product,
   subscriptionId,
+  loading,
   onSubscribeToggle,
 }: ProductItemProps) {
   return (
@@ -433,10 +522,27 @@ function ProductListItem({
         </div>
 
         <div className="flex min-w-0 flex-1 flex-col gap-2.5">
-          <div className="flex items-start justify-between gap-2">
+          <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-2">
             <span className="text-sm font-medium leading-snug">
               {product.name}
             </span>
+            <div className="md:hidden">
+              {product.price != null && (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm font-semibold">
+                    ₹{product.price}
+                  </span>
+                  {product.mrp != null && product.mrp !== product.price && (
+                    <span className="text-xs line-through text-muted-foreground">
+                      ₹{product.mrp}
+                    </span>
+                  )}
+                  {product.discount != null && (
+                    <DiscountBadge discount={product.discount} />
+                  )}
+                </div>
+              )}
+            </div>
             <span className="hidden md:block">
               <AvailabilityBadge available={product.available} />
             </span>
@@ -458,7 +564,7 @@ function ProductListItem({
             )}
 
             <div className="flex items-center justify-between">
-              {product.inventoryQuantity != null && (
+              {!!product.inventoryQuantity && (
                 <span className="text-xs text-muted-foreground">
                   {product.inventoryQuantity} in stock
                 </span>
@@ -466,6 +572,7 @@ function ProductListItem({
               <div className="ml-auto flex items-center gap-2">
                 <SubscribeButton
                   subscriptionId={subscriptionId}
+                  loading={loading}
                   onToggle={() => onSubscribeToggle(product)}
                 />
                 <a
@@ -475,7 +582,7 @@ function ProductListItem({
                   className="flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
                 >
                   View on Amul
-                  <ExternalLink className="h-3 w-3" />
+                  <ExternalLink className="size-4" />
                 </a>
               </div>
             </div>
@@ -483,42 +590,27 @@ function ProductListItem({
         </div>
       </div>
 
-      <div className="md:hidden flex items-center gap-2">
-        {product.price != null && (
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-semibold">₹{product.price}</span>
-            {product.mrp != null && product.mrp !== product.price && (
-              <span className="text-xs line-through text-muted-foreground">
-                ₹{product.mrp}
-              </span>
-            )}
-            {product.discount != null && (
-              <DiscountBadge discount={product.discount} />
-            )}
-          </div>
+      <div className="md:hidden flex items-center justify-between w-full gap-2">
+        {!!product.inventoryQuantity && (
+          <span className="text-xs text-muted-foreground">
+            {product.inventoryQuantity} in stock
+          </span>
         )}
-
-        <div className="flex items-center justify-between">
-          {product.inventoryQuantity != null && (
-            <span className="text-xs text-muted-foreground">
-              {product.inventoryQuantity} in stock
-            </span>
-          )}
-          <div className="ml-auto flex items-center gap-2">
-            <SubscribeButton
-              subscriptionId={subscriptionId}
-              onToggle={() => onSubscribeToggle(product)}
-            />
-            <a
-              href={product.productUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-            >
-              View on Amul
-              <ExternalLink className="h-3 w-3" />
-            </a>
-          </div>
+        <div className="ml-auto flex items-center gap-2">
+          <SubscribeButton
+            subscriptionId={subscriptionId}
+            loading={loading}
+            onToggle={() => onSubscribeToggle(product)}
+          />
+          <a
+            href={product.productUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+          >
+            View on Amul
+            <ExternalLink className="size-4" />
+          </a>
         </div>
       </div>
     </li>
@@ -528,6 +620,7 @@ function ProductListItem({
 function ProductCardItem({
   product,
   subscriptionId,
+  loading,
   onSubscribeToggle,
 }: ProductItemProps) {
   return (
@@ -569,11 +662,12 @@ function ProductCardItem({
             </div>
           )}
 
-          <div className="flex items-center justify-between gap-1">
+          <div className="flex items-center justify-between flex-wrap gap-2">
             <AvailabilityBadge available={product.available} />
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-2">
               <SubscribeButton
                 subscriptionId={subscriptionId}
+                loading={loading}
                 onToggle={() => onSubscribeToggle(product)}
               />
               <a
@@ -582,7 +676,7 @@ function ProductCardItem({
                 rel="noopener noreferrer"
                 className="flex items-center gap-0.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
               >
-                <ExternalLink className="h-3 w-3" />
+                <ExternalLink className="size-4" />
               </a>
             </div>
           </div>
@@ -594,17 +688,20 @@ function ProductCardItem({
 
 function SubscribeButton({
   subscriptionId,
+  loading,
   onToggle,
 }: {
   subscriptionId: string | undefined;
+  loading: boolean;
   onToggle: () => void;
 }) {
   const subscribed = !!subscriptionId;
   return (
     <Button
       variant="ghost"
-      size="icon-xs"
+      size="icon-sm"
       onClick={onToggle}
+      disabled={loading}
       title={subscribed ? "Unsubscribe from alerts" : "Subscribe to alerts"}
       className={cn(
         subscribed
@@ -612,10 +709,12 @@ function SubscribeButton({
           : "text-muted-foreground hover:text-foreground",
       )}
     >
-      {subscribed ? (
-        <BellOff className="h-3.5 w-3.5" />
+      {loading ? (
+        <Loader2 className="size-4 animate-spin" />
+      ) : subscribed ? (
+        <BellOff className="size-4" />
       ) : (
-        <Bell className="h-3.5 w-3.5" />
+        <Bell className="size-4" />
       )}
     </Button>
   );

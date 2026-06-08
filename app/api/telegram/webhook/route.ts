@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
   if (!token) {
     await sendTelegramMessage(
       chatId,
-      "Please use the connect button in the Amul Stock Tracker app to link your account."
+      "Please enter your connection link in the format: /start <token>. You can generate this link from the app."
     );
     return NextResponse.json({ ok: true });
   }

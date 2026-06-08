@@ -331,3 +331,70 @@ export const SUBSTORES = [
     sort_order: 0,
   },
 ];
+
+export const CATEGORIES = [
+  {
+    name: "Protein",
+    alias: "protein",
+  },
+  {
+    name: "Organic",
+    alias: "organic",
+  },
+  {
+    name: "Kitchen Essentials",
+    alias: "kitchen-essentials",
+  },
+  {
+    name: "Tea & Snacks",
+    alias: "tea-and-snacks",
+  },
+  {
+    name: "Chocolates",
+    alias: "chocolates",
+  },
+  {
+    name: "Peanut Butter",
+    alias: "peanut-butter",
+  },
+  {
+    name: "Beverages",
+    alias: "beverages",
+  },
+  {
+    name: "Camel Milk",
+    alias: "camel-milk",
+  },
+  {
+    name: "Sweets",
+    alias: "sweets",
+  },
+  {
+    name: "Milk",
+    alias: "milk",
+  },
+  {
+    name: "Cake",
+    alias: "cake",
+  },
+  {
+    name: "Ghee",
+    alias: "ghee",
+  },
+  {
+    name: "Infant Food",
+    alias: "infant-food",
+  },
+  {
+    name: "Fresh Cream",
+    alias: "fresh-cream",
+  },
+  {
+    name: "Panchamrit",
+    alias: "panchamrit",
+  },
+  {
+    name: "Milk Powders",
+    alias: "milk-powders",
+  },
+];
