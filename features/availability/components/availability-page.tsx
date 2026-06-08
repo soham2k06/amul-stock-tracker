@@ -412,34 +412,79 @@ function ProductListItem({
   onSubscribeToggle,
 }: ProductItemProps) {
   return (
-    <li className="flex gap-4 rounded-2xl border p-4">
-      <div className="relative h-24 w-24 shrink-0">
-        {product.imageUrl ? (
-          <Image
-            src={product.imageUrl}
-            alt={product.name}
-            fill
-            sizes="96px"
-            className="rounded-xl object-contain"
-          />
-        ) : (
-          <div className="h-full w-full rounded-xl bg-muted" />
-        )}
-        {product.label && (
-          <div className="absolute -bottom-1.5 left-0 right-0 flex justify-center">
-            <LabelBadge label={product.label} />
-          </div>
-        )}
-      </div>
-
-      <div className="flex min-w-0 flex-1 flex-col gap-2.5">
-        <div className="flex items-start justify-between gap-2">
-          <span className="text-sm font-medium leading-snug">
-            {product.name}
-          </span>
-          <AvailabilityBadge available={product.available} />
+    <li className="flex flex-col gap-2 rounded-2xl border p-4">
+      <div className="flex gap-4">
+        <div className="relative h-20 w-20 shrink-0">
+          {product.imageUrl ? (
+            <Image
+              src={product.imageUrl}
+              alt={product.name}
+              fill
+              sizes="96px"
+              className="rounded-xl object-contain"
+            />
+          ) : (
+            <div className="h-full w-full rounded-xl bg-muted" />
+          )}
+          {product.label && (
+            <div className="absolute -bottom-1.5 left-0 right-0 flex justify-center">
+              <LabelBadge label={product.label} />
+            </div>
+          )}
         </div>
 
+        <div className="flex min-w-0 flex-1 flex-col gap-2.5">
+          <div className="flex items-start justify-between gap-2">
+            <span className="text-sm font-medium leading-snug">
+              {product.name}
+            </span>
+            <span className="hidden md:block">
+              <AvailabilityBadge available={product.available} />
+            </span>
+          </div>
+
+          <div className="hidden md:flex md:flex-col md:gap-2.5">
+            {product.price != null && (
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-sm font-semibold">₹{product.price}</span>
+                {product.mrp != null && product.mrp !== product.price && (
+                  <span className="text-xs line-through text-muted-foreground">
+                    ₹{product.mrp}
+                  </span>
+                )}
+                {product.discount != null && (
+                  <DiscountBadge discount={product.discount} />
+                )}
+              </div>
+            )}
+
+            <div className="flex items-center justify-between">
+              {product.inventoryQuantity != null && (
+                <span className="text-xs text-muted-foreground">
+                  {product.inventoryQuantity} in stock
+                </span>
+              )}
+              <div className="ml-auto flex items-center gap-2">
+                <SubscribeButton
+                  subscriptionId={subscriptionId}
+                  onToggle={() => onSubscribeToggle(product)}
+                />
+                <a
+                  href={product.productUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  View on Amul
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="md:hidden flex items-center gap-2">
         {product.price != null && (
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-sm font-semibold">₹{product.price}</span>
@@ -510,35 +555,37 @@ function ProductCardItem({
         )}
       </div>
 
-      <div className="flex flex-col gap-2 p-3">
+      <div className="flex flex-col justify-between flex-1 gap-2 p-3">
         <span className="text-sm font-medium leading-snug">{product.name}</span>
 
-        {product.price != null && (
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-sm font-semibold">₹{product.price}</span>
-            {product.mrp != null && product.mrp !== product.price && (
-              <span className="text-xs line-through text-muted-foreground">
-                ₹{product.mrp}
-              </span>
-            )}
-          </div>
-        )}
+        <div className="flex flex-col gap-2">
+          {product.price != null && (
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-sm font-semibold">₹{product.price}</span>
+              {product.mrp != null && product.mrp !== product.price && (
+                <span className="text-xs line-through text-muted-foreground">
+                  ₹{product.mrp}
+                </span>
+              )}
+            </div>
+          )}
 
-        <div className="flex items-center justify-between gap-1">
-          <AvailabilityBadge available={product.available} />
-          <div className="flex items-center gap-1">
-            <SubscribeButton
-              subscriptionId={subscriptionId}
-              onToggle={() => onSubscribeToggle(product)}
-            />
-            <a
-              href={product.productUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-0.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
-            >
-              <ExternalLink className="h-3 w-3" />
-            </a>
+          <div className="flex items-center justify-between gap-1">
+            <AvailabilityBadge available={product.available} />
+            <div className="flex items-center gap-1">
+              <SubscribeButton
+                subscriptionId={subscriptionId}
+                onToggle={() => onSubscribeToggle(product)}
+              />
+              <a
+                href={product.productUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-0.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <ExternalLink className="h-3 w-3" />
+              </a>
+            </div>
           </div>
         </div>
       </div>

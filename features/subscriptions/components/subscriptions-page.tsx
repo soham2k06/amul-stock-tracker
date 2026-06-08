@@ -210,12 +210,12 @@ function PushNotificationPanel() {
 
   return (
     <div className="rounded-2xl border px-4 py-3 flex flex-col gap-3">
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex flex-col gap-0.5">
-          <p className="text-sm font-medium">Push notifications</p>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-sm font-medium">Web Push notifications</p>
+          <p className="text-xs text-muted-foreground whitespace-pre-line">
             {subscribed
-              ? "You'll receive browser alerts when subscribed products come back in stock."
+              ? "You'll receive browser alerts when subscribed products come back in stock.\nEnsure you allow notifications for the browser you are using from settings."
               : "Enable to get browser alerts when subscribed products come back in stock."}
           </p>
         </div>
