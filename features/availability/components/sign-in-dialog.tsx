@@ -11,6 +11,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { authClient } from "@/lib/auth-client";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 
 type Mode = "signin" | "signup";
 
@@ -25,6 +27,7 @@ export function SignInDialog({ open, onOpenChange, onSuccess }: Props) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -39,7 +42,7 @@ export function SignInDialog({ open, onOpenChange, onSuccess }: Props) {
     setLoading(true);
     try {
       if (mode === "signin") {
-        const result = await authClient.signIn.email({ email, password });
+        const result = await authClient.signIn.email({ email, password, rememberMe });
         if (result.error) throw new Error(result.error.message ?? "Sign in failed");
       } else {
         const result = await authClient.signUp.email({ email, password, name });
@@ -95,6 +98,19 @@ export function SignInDialog({ open, onOpenChange, onSuccess }: Props) {
             required
             autoComplete={mode === "signin" ? "current-password" : "new-password"}
           />
+
+          {mode === "signin" && (
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="remember-me"
+                checked={rememberMe}
+                onCheckedChange={(checked) => setRememberMe(checked === true)}
+              />
+              <Label htmlFor="remember-me" className="text-sm font-normal cursor-pointer">
+                Remember me
+              </Label>
+            </div>
+          )}
 
           {error && <p className="text-sm text-destructive">{error}</p>}
 

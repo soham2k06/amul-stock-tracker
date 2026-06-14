@@ -74,7 +74,6 @@ export type ProductAvailability = {
   available: boolean;
 
   inventoryQuantity?: number;
-  inventoryAllowOutOfStock?: boolean;
 
   imageUrl?: string;
   price?: number;

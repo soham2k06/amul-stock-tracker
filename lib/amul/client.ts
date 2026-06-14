@@ -33,8 +33,7 @@ function toProductAvailability(
   const available =
     product.available === 1 &&
     (product.inventory_quantity === undefined ||
-      product.inventory_quantity > 0 ||
-      product.inventory_allow_out_of_stock === 1);
+      product.inventory_quantity > 0);
 
   const thumbnail = product.images?.[0]?.image;
 
@@ -47,7 +46,6 @@ function toProductAvailability(
     alias: product.alias,
     available,
     inventoryQuantity: product.inventory_quantity,
-    inventoryAllowOutOfStock: product.inventory_allow_out_of_stock === 1,
     imageUrl: thumbnail
       ? thumbnail.includes(`s/${STORE_ID}`)
         ? `https://shop.amul.com/${thumbnail}`
@@ -98,19 +96,26 @@ export async function searchAmulProducts(
     if (query) {
       // Fetch all products, filter, then paginate so that total and
       // page offsets reflect the filtered set rather than Amul's full count.
-      const res = await api.getProducts({ category, limit: FETCH_ALL_LIMIT, start: 0 });
+      const res = await api.getProducts({
+        category,
+        limit: FETCH_ALL_LIMIT,
+        start: 0,
+      });
       const q = query.toLowerCase();
       const filtered = res.data.filter(
         (p) =>
-          p.name.toLowerCase().includes(q) ||
-          p.alias.toLowerCase().includes(q),
+          p.name.toLowerCase().includes(q) || p.alias.toLowerCase().includes(q),
       );
       total = filtered.length;
       const start = opts?.start ?? 0;
       const limit = opts?.limit ?? 8;
       products = filtered.slice(start, start + limit);
     } else {
-      const res = await api.getProducts({ category, limit: opts?.limit, start: opts?.start });
+      const res = await api.getProducts({
+        category,
+        limit: opts?.limit,
+        start: opts?.start,
+      });
       products = res.data;
       total = res.total;
     }

@@ -532,7 +532,7 @@ function ProductListItem({
                   <span className="text-sm font-semibold">
                     ₹{product.price}
                   </span>
-                  {product.mrp != null && product.mrp !== product.price && (
+                  {product.mrp && product.mrp !== product.price && (
                     <span className="text-xs line-through text-muted-foreground">
                       ₹{product.mrp}
                     </span>
@@ -552,7 +552,7 @@ function ProductListItem({
             {product.price != null && (
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-sm font-semibold">₹{product.price}</span>
-                {product.mrp != null && product.mrp !== product.price && (
+                {product.mrp && product.mrp !== product.price && (
                   <span className="text-xs line-through text-muted-foreground">
                     ₹{product.mrp}
                   </span>
@@ -564,7 +564,7 @@ function ProductListItem({
             )}
 
             <div className="flex items-center justify-between">
-              {!!product.inventoryQuantity && (
+              {!!product.inventoryQuantity && product.available && (
                 <span className="text-xs text-muted-foreground">
                   {product.inventoryQuantity} in stock
                 </span>
@@ -591,7 +591,7 @@ function ProductListItem({
       </div>
 
       <div className="md:hidden flex items-center justify-between w-full gap-2">
-        {!!product.inventoryQuantity && (
+        {!!product.inventoryQuantity && product.available && (
           <span className="text-xs text-muted-foreground">
             {product.inventoryQuantity} in stock
           </span>
@@ -651,16 +651,24 @@ function ProductCardItem({
         <span className="text-sm font-medium leading-snug">{product.name}</span>
 
         <div className="flex flex-col gap-2">
-          {product.price != null && (
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-sm font-semibold">₹{product.price}</span>
-              {product.mrp != null && product.mrp !== product.price && (
-                <span className="text-xs line-through text-muted-foreground">
-                  ₹{product.mrp}
-                </span>
-              )}
-            </div>
-          )}
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+            {product.price != null && (
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-sm font-semibold">₹{product.price}</span>
+                {product.mrp && product.mrp !== product.price && (
+                  <span className="text-xs line-through text-muted-foreground">
+                    ₹{product.mrp}
+                  </span>
+                )}
+              </div>
+            )}
+
+            {!!product.inventoryQuantity && product.available && (
+              <span className="text-xs text-muted-foreground">
+                {product.inventoryQuantity} in stock
+              </span>
+            )}
+          </div>
 
           <div className="flex items-center justify-between flex-wrap gap-2">
             <AvailabilityBadge available={product.available} />
