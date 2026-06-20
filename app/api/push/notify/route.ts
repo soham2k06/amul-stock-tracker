@@ -6,13 +6,7 @@ import { searchAmulProducts } from "@/lib/amul/client";
 
 const LOW_STOCK_THRESHOLD = 5;
 
-// Called by a cron job. Protect with NOTIFY_SECRET env var.
-export async function POST(request: NextRequest) {
-  const secret = request.headers.get("x-notify-secret");
-  if (!secret || secret !== process.env.NOTIFY_SECRET) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+async function runNotifications() {
   const subscriptions = await prisma.subscription.findMany({
     include: {
       user: { include: { pushSubscriptions: true, telegramConnection: true } },
@@ -20,7 +14,7 @@ export async function POST(request: NextRequest) {
   });
 
   if (subscriptions.length === 0) {
-    return NextResponse.json({ checked: 0, notified: 0 });
+    return { checked: 0, notified: 0 };
   }
 
   // Group subscriptions by pincode to minimize API calls
@@ -112,5 +106,27 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  return NextResponse.json({ checked: subscriptions.length, notified });
+  return { checked: subscriptions.length, notified };
+}
+
+// Called by Vercel Cron every 5 minutes.
+export async function GET(request: NextRequest) {
+  const auth = request.headers.get("authorization");
+  if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const result = await runNotifications();
+  return NextResponse.json(result);
+}
+
+// Manual trigger protected by NOTIFY_SECRET.
+export async function POST(request: NextRequest) {
+  const secret = request.headers.get("x-notify-secret");
+  if (!secret || secret !== process.env.NOTIFY_SECRET) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const result = await runNotifications();
+  return NextResponse.json(result);
 }
