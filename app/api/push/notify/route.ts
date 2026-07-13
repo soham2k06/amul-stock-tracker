@@ -3,8 +3,27 @@ import { prisma } from "@/lib/prisma";
 import { sendPushNotification } from "@/lib/webpush";
 import { sendTelegramMessage } from "@/lib/telegram";
 import { searchAmulProducts } from "@/lib/amul/client";
+import type { ProductAvailability } from "@/types/amul";
 
 const LOW_STOCK_THRESHOLD = 5;
+const SITE_URL = (process.env.BETTER_AUTH_URL ?? "http://localhost:3000").replace(
+  /\/$/,
+  "",
+);
+
+function buildStockMessageBody(
+  productName: string,
+  product: ProductAvailability,
+  pincode: string,
+) {
+  const price = product.price != null ? `₹${product.price}` : "Price unavailable";
+  const quantity = product.inventoryQuantity ?? 0;
+  return [
+    productName,
+    `${price} • Pincode ${pincode} • ${quantity} available`,
+    `Manage your subscriptions at ${SITE_URL}/subscriptions`,
+  ].join("\n");
+}
 
 async function runNotifications() {
   const subscriptions = await prisma.subscription.findMany({
@@ -50,14 +69,9 @@ async function runNotifications() {
       const cameBackInStock = available && sub.lastAvailable === false;
       const droppedToLowStock = isLowStock && !sub.lastLowStock && !cameBackInStock;
 
-      const qtyNote =
-        isLowStock && inventoryQuantity !== undefined
-          ? ` Only ${inventoryQuantity} left!`
-          : "";
-
-      if (cameBackInStock) {
-        const title = "Back in stock!";
-        const body = `${sub.productName} is now available in ${pincode}.${qtyNote}`;
+      if (cameBackInStock || droppedToLowStock) {
+        const title = cameBackInStock ? "Back in stock" : `Only ${inventoryQuantity} left`;
+        const body = buildStockMessageBody(sub.productName, product, pincode);
         const url = `/?pincode=${pincode}`;
 
         for (const pushSub of sub.user.pushSubscriptions) {
@@ -72,36 +86,24 @@ async function runNotifications() {
         if (sub.user.telegramConnection) {
           await sendTelegramMessage(
             sub.user.telegramConnection.chatId,
-            `${title} ${body}`,
-          ).catch(() => null);
-          notified++;
-        }
-      } else if (droppedToLowStock) {
-        const title = "Low stock alert!";
-        const body = `Only ${inventoryQuantity} of ${sub.productName} left in ${pincode}.`;
-        const url = `/?pincode=${pincode}`;
-
-        for (const pushSub of sub.user.pushSubscriptions) {
-          const res = await sendPushNotification(pushSub, { title, body, url });
-          if (res === "expired") {
-            await prisma.pushSubscription.delete({ where: { id: pushSub.id } });
-          } else {
-            notified++;
-          }
-        }
-
-        if (sub.user.telegramConnection) {
-          await sendTelegramMessage(
-            sub.user.telegramConnection.chatId,
-            `${title} ${body}`,
+            `${title}\n${body}`,
           ).catch(() => null);
           notified++;
         }
       }
 
+      // lastLowStock is sticky for the current in-stock streak: once the
+      // low-stock alert has fired, don't re-fire it just because the
+      // quantity ticks back above the threshold and dips again. It only
+      // resets when the product goes fully out of stock, starting a new
+      // restock cycle.
+      const newLastLowStock = available
+        ? sub.lastLowStock || isLowStock
+        : false;
+
       await prisma.subscription.update({
         where: { id: sub.id },
-        data: { lastAvailable: available, lastLowStock: isLowStock },
+        data: { lastAvailable: available, lastLowStock: newLastLowStock },
       });
     }
   }

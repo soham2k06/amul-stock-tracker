@@ -61,7 +61,7 @@ export function PincodeCombobox({ value, onChange }: Props) {
         inputMode="numeric"
         placeholder="e.g. 395004"
         showClear={!!value}
-        className="w-full"
+        className="w-full h-11"
       />
       <ComboboxContent>
         <ComboboxList>

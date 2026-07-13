@@ -1,15 +1,20 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
-import { AvailabilityPage } from "@/features/availability/components/availability-page";
+import { HomePage } from "@/features/availability/home-page";
+import { getServerSession } from "@/lib/get-server-session";
+
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Amul Stock Notifier",
 };
 
-export default function Home() {
+export default async function Home() {
+  const session = await getServerSession();
+
   return (
     <Suspense>
-      <AvailabilityPage />
+      <HomePage initialSession={session} />
     </Suspense>
   );
 }

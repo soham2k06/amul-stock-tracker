@@ -4,34 +4,38 @@ import Link from "next/link";
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { QUERY_KEYS } from "@/constants/query-keys";
+import type { Subscription } from "@prisma/client";
 import {
   Bell,
-  BellOff,
+  BellRing,
   CheckCheck,
   Copy,
   ExternalLink,
-  FlaskConical,
-  MapPin,
   Send,
-  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { authClient } from "@/lib/auth-client";
+import type { ServerSession } from "@/lib/get-server-session";
+import { useSession } from "@/hooks/use-session";
 import { usePushSubscription } from "@/hooks/use-push-subscription";
-import { cn } from "@/lib/utils";
+import { useTelegramConnection } from "@/hooks/use-telegram-connection";
+import ChannelCard, { ChannelCardSkeleton } from "../channel-card";
+import { toast } from "sonner";
+import SubscriptionRow from "../subscription-row";
+import { SignInDialog } from "@/features/availability/sign-in-dialog";
 
-type SubscriptionRecord = {
-  id: string;
-  productId: string;
-  productName: string;
-  pincode: string;
-};
+type SubscriptionRecord = Pick<
+  Subscription,
+  "id" | "productId" | "productName" | "pincode"
+>;
 
-type GroupedSubscriptions = Record<string, SubscriptionRecord[]>;
-
-export function SubscriptionsPage() {
-  const { data: session, isPending: sessionPending } = authClient.useSession();
+export function SubscriptionsPage({
+  initialSession,
+}: {
+  initialSession?: ServerSession;
+}) {
+  const { data: session } = useSession(initialSession);
+  const [signInOpen, setSignInOpen] = useState(false);
   const queryClient = useQueryClient();
 
   const { data: subscriptions, isLoading } = useQuery<SubscriptionRecord[]>({
@@ -56,464 +60,283 @@ export function SubscriptionsPage() {
     },
   });
 
-  if (sessionPending) {
-    return (
-      <PageShell>
-        <LoadingSkeleton />
-      </PageShell>
-    );
-  }
+  const push = usePushSubscription();
+  const pushSubscribed = push.state === "subscribed";
+  const pushUnsupported = push.state === "unsupported";
+  const pushDenied = push.state === "denied";
 
-  if (!session) {
-    return (
-      <PageShell>
-        <div className="rounded-2xl border border-dashed p-10 text-center text-sm text-muted-foreground">
-          Sign in to view your subscriptions.
-        </div>
-      </PageShell>
-    );
-  }
-
-  if (isLoading) {
-    return (
-      <PageShell>
-        <LoadingSkeleton />
-      </PageShell>
-    );
-  }
-
-  const grouped: GroupedSubscriptions = {};
-  for (const sub of subscriptions ?? []) {
-    (grouped[sub.pincode] ??= []).push(sub);
-  }
-  const pincodes = Object.keys(grouped).sort();
-
-  return (
-    <PageShell>
-      <PushNotificationPanel />
-      <TelegramPanel />
-
-      {pincodes.length === 0 ? (
-        <div className="rounded-2xl border border-dashed p-10 text-center">
-          <BellOff className="mx-auto mb-3 h-8 w-8 text-muted-foreground/50" />
-          <p className="text-sm font-medium">No subscriptions yet</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Use the bell icon on any product to subscribe to stock alerts.
-          </p>
-          <Link href="/" className="mt-4 inline-block">
-            <Button size="sm" variant="outline">
-              Browse products
-            </Button>
-          </Link>
-        </div>
-      ) : (
-        <div className="flex flex-col gap-6">
-          {pincodes.map((pincode) => (
-            <section key={pincode} className="flex flex-col gap-2">
-              <div className="flex items-center gap-1.5">
-                <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
-                <Link
-                  href={`/?pincode=${pincode}`}
-                  className="flex items-center gap-1 text-sm font-medium hover:underline underline-offset-4"
-                >
-                  {pincode}
-                  <ExternalLink className="h-3 w-3 text-muted-foreground" />
-                </Link>
-                <span className="text-xs text-muted-foreground">
-                  {grouped[pincode].length} product
-                  {grouped[pincode].length !== 1 ? "s" : ""}
-                </span>
-              </div>
-
-              <ul className="flex flex-col gap-1.5">
-                {grouped[pincode].map((sub) => (
-                  <li
-                    key={sub.id}
-                    className="flex items-center justify-between gap-3 rounded-xl border px-4 py-3"
-                  >
-                    <span className="text-sm">{sub.productName}</span>
-                    <Button
-                      variant="ghost"
-                      size="xs"
-                      onClick={() => unsubscribeMutation.mutate(sub.id)}
-                      disabled={unsubscribeMutation.isPending}
-                      className="shrink-0 gap-1 text-muted-foreground hover:text-destructive"
-                    >
-                      <BellOff className="h-3.5 w-3.5" />
-                      Unsubscribe
-                    </Button>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ))}
-        </div>
-      )}
-    </PageShell>
-  );
-}
-
-function PushNotificationPanel() {
-  const { state, subscribe, unsubscribe, sendTest } = usePushSubscription();
-  const [busy, setBusy] = useState(false);
-  const [testResult, setTestResult] = useState<string | null>(null);
-
-  async function handleToggle() {
-    setBusy(true);
-    setTestResult(null);
+  async function handlePushToggle() {
+    if (pushUnsupported) {
+      toast.error("Push notifications aren't supported in this browser");
+      return;
+    }
+    if (pushDenied) {
+      toast.error(
+        "Notifications are blocked. Allow them in your browser settings and reload.",
+      );
+      return;
+    }
     try {
-      if (state === "subscribed") {
-        await unsubscribe();
+      if (pushSubscribed) {
+        await push.unsubscribe();
+        toast.message("Web push disabled");
       } else {
-        await subscribe();
+        await push.subscribe();
+        toast.success("Web push enabled");
       }
     } catch (err) {
-      setTestResult(
-        err instanceof Error ? err.message : "Something went wrong",
-      );
-    } finally {
-      setBusy(false);
+      toast.error(err instanceof Error ? err.message : "Something went wrong");
     }
   }
 
-  async function handleTest() {
-    setBusy(true);
-    setTestResult(null);
+  async function handlePushTest() {
     try {
-      const result = await sendTest();
-      setTestResult(
+      const result = await push.sendTest();
+      toast.success(
         `Sent ${result.sent} of ${result.total} notification${result.total !== 1 ? "s" : ""}.`,
       );
     } catch (err) {
-      setTestResult(err instanceof Error ? err.message : "Failed to send test");
-    } finally {
-      setBusy(false);
+      toast.error(err instanceof Error ? err.message : "Failed to send test");
     }
   }
 
-  if (state === "loading") return null;
+  const pushDescription = pushUnsupported
+    ? "Push notifications are not supported in this browser."
+    : pushDenied
+      ? "Notifications are blocked. Allow them in your browser settings and reload."
+      : "You'll receive browser alerts when subscribed products come back in stock. Ensure you allow notifications for the browser you are using from settings.";
 
-  if (state === "unsupported") {
-    return (
-      <div className="rounded-2xl border border-dashed px-4 py-3 text-sm text-muted-foreground">
-        Push notifications are not supported in this browser.
-      </div>
-    );
+  const telegram = useTelegramConnection();
+
+  async function handleTelegramToggle() {
+    if (telegram.pending) {
+      telegram.cancelPending();
+      return;
+    }
+    try {
+      if (telegram.connected) {
+        await telegram.disconnect();
+        toast.message("Telegram disconnected");
+      } else {
+        await telegram.connect();
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Something went wrong");
+    }
   }
 
-  if (state === "denied") {
-    return (
-      <div className="rounded-2xl border border-dashed px-4 py-3 text-sm text-muted-foreground">
-        Notifications are blocked. Allow them in your browser settings and
-        reload.
-      </div>
-    );
+  async function handleTelegramTest() {
+    try {
+      await telegram.sendTest();
+      toast.success("Test message sent to Telegram");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to send test");
+    }
   }
 
-  const subscribed = state === "subscribed";
+  const telegramDescription = telegram.connected
+    ? "Your Telegram account is linked. You'll receive messages when subscribed products come back in stock."
+    : telegram.pending
+      ? "Waiting for you to connect in Telegram..."
+      : "Get instant Amul restock alerts delivered to your Telegram. Fastest channel — perfect for popular protein drops that sell out in minutes.";
 
-  return (
-    <div className="rounded-2xl border px-4 py-3 flex flex-col gap-3">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex flex-col gap-0.5">
-          <p className="text-sm font-medium">Web Push notifications</p>
-          <p className="text-xs text-muted-foreground whitespace-pre-line">
-            {subscribed
-              ? "You'll receive browser alerts when subscribed products come back in stock.\nEnsure you allow notifications for the browser you are using from settings."
-              : "Enable to get browser alerts when subscribed products come back in stock."}
+  if (!session) {
+    return (
+      <>
+        <div className="rounded-2xl mt-12 border border-dashed p-10 text-center">
+          <p className="text-sm text-muted-foreground">
+            Sign in to view your subscriptions.
           </p>
-        </div>
-
-        <div className="flex items-center gap-2 shrink-0">
-          {subscribed && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleTest}
-              disabled={busy}
-              className="gap-1.5"
-            >
-              <FlaskConical className="h-3.5 w-3.5" />
-              Test
-            </Button>
-          )}
           <Button
-            variant={subscribed ? "outline" : "default"}
-            size="sm"
-            onClick={handleToggle}
-            disabled={busy}
-            className={cn(
-              "gap-1.5",
-              subscribed && "text-destructive hover:text-destructive",
-            )}
+            className="mt-4 rounded-xl"
+            onClick={() => setSignInOpen(true)}
           >
-            {subscribed ? (
-              <>
-                <BellOff className="h-3.5 w-3.5" />
-                Disable
-              </>
-            ) : (
-              <>
-                <Bell className="h-3.5 w-3.5" />
-                Enable
-              </>
-            )}
+            Sign in
           </Button>
         </div>
-      </div>
-    </div>
-  );
-}
-
-type PendingToken = { token: string; botUsername: string };
-
-function TelegramPanel() {
-  const queryClient = useQueryClient();
-  const [busy, setBusy] = useState(false);
-  const [pending, setPending] = useState<PendingToken | null>(null);
-  const [copied, setCopied] = useState(false);
-  const [testResult, setTestResult] = useState<string | null>(null);
-
-  const { data, isLoading } = useQuery<{ connected: boolean }>({
-    queryKey: QUERY_KEYS.telegramStatus(),
-    queryFn: async ({ signal }) => {
-      const res = await fetch("/api/telegram/status", { signal });
-      if (!res.ok) return { connected: false };
-      return res.json();
-    },
-  });
-
-  const connected = data?.connected ?? false;
-
-  async function handleConnect() {
-    setBusy(true);
-    setTestResult(null);
-    try {
-      const res = await fetch("/api/telegram/token", { method: "POST" });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "Failed to generate token");
-
-      const { token, botUsername } = json as PendingToken;
-      setPending({ token, botUsername });
-      setBusy(false);
-
-      // Poll until the webhook confirms connection
-      const poll = setInterval(async () => {
-        const statusRes = await fetch("/api/telegram/status");
-        const status = await statusRes.json();
-        if (status.connected) {
-          clearInterval(poll);
-          setPending(null);
-          queryClient.invalidateQueries({
-            queryKey: QUERY_KEYS.telegramStatus(),
-          });
-        }
-      }, 2000);
-
-      // Expire after 15 minutes (matches token TTL)
-      setTimeout(
-        () => {
-          clearInterval(poll);
-          setPending(null);
-        },
-        15 * 60 * 1000,
-      );
-    } catch (err) {
-      setTestResult(
-        err instanceof Error ? err.message : "Something went wrong",
-      );
-      setBusy(false);
-    }
+        <SignInDialog open={signInOpen} onOpenChange={setSignInOpen} />
+      </>
+    );
   }
 
-  function handleCancelPending() {
-    setPending(null);
-    setBusy(false);
-  }
-
-  async function handleCopy(command: string) {
-    await navigator.clipboard.writeText(command);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }
-
-  async function handleDisconnect() {
-    setBusy(true);
-    setTestResult(null);
-    try {
-      await fetch("/api/telegram/disconnect", { method: "DELETE" });
-      queryClient.invalidateQueries({ queryKey: QUERY_KEYS.telegramStatus() });
-    } catch (err) {
-      setTestResult(
-        err instanceof Error ? err.message : "Something went wrong",
-      );
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleTest() {
-    setBusy(true);
-    setTestResult(null);
-    try {
-      const res = await fetch("/api/telegram/test", { method: "POST" });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "Failed to send test");
-      setTestResult("Test message sent to Telegram.");
-    } catch (err) {
-      setTestResult(err instanceof Error ? err.message : "Failed to send test");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  if (isLoading) return null;
-
-  const startCommand = pending ? `/start ${pending.token}` : "";
+  const subs = subscriptions ?? [];
 
   return (
-    <div className="rounded-2xl border px-4 py-3 flex flex-col gap-3">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex flex-col gap-0.5">
-          <p className="text-sm font-medium">Telegram notifications</p>
-          <p className="text-xs text-muted-foreground">
-            {connected
-              ? "Your Telegram account is linked. You'll receive messages when subscribed products come back in stock."
-              : pending
-                ? "Waiting for you to connect in Telegram..."
-                : "Connect Telegram to receive stock alerts as messages."}
-          </p>
+    <>
+      <section className="pt-10">
+        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
+          <Bell className="h-3.5 w-3.5" /> Notifications
         </div>
-
-        <div className="flex items-center gap-2 shrink-0">
-          {connected && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleTest}
-              disabled={busy}
-              className="gap-1.5"
-            >
-              <FlaskConical className="h-3.5 w-3.5" />
-              Test
-            </Button>
-          )}
-          {pending ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleCancelPending}
-              className="gap-1.5 text-muted-foreground"
-            >
-              <X className="h-3.5 w-3.5" />
-              Cancel
-            </Button>
-          ) : (
-            <Button
-              variant={connected ? "outline" : "default"}
-              size="sm"
-              onClick={connected ? handleDisconnect : handleConnect}
-              disabled={busy}
-              className={cn(
-                "gap-1.5",
-                connected && "text-destructive hover:text-destructive",
-              )}
-            >
-              {connected ? (
-                <>
-                  <X className="h-3.5 w-3.5" />
-                  Disconnect
-                </>
-              ) : (
-                <>
-                  <Send className="h-3.5 w-3.5" />
-                  Connect
-                </>
-              )}
-            </Button>
-          )}
-        </div>
-      </div>
-
-      {pending && (
-        <div className="flex flex-col gap-3 rounded-xl bg-muted/50 px-3 py-3">
-          <div className="flex flex-col gap-1">
-            <p className="text-xs font-medium">
-              Step 1 - Open the bot in Telegram
-            </p>
-            <a
-              href={`https://t.me/${pending.botUsername}`}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex w-fit items-center gap-1.5 text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
-            >
-              <ExternalLink className="h-3 w-3" />@{pending.botUsername}
-            </a>
-          </div>
-          <div className="flex flex-col gap-1">
-            <p className="text-xs font-medium">
-              Step 2 - Copy and send this command to the bot
-            </p>
-            <div className="flex flex-col md:flex-row md:items-center gap-2">
-              <code className="flex-1 rounded-md border bg-background px-2.5 py-1.5 font-mono text-xs break-all">
-                {startCommand}
-              </code>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleCopy(startCommand)}
-                className="shrink-0 gap-1.5"
-              >
-                {copied ? (
-                  <CheckCheck className="h-3.5 w-3.5 text-green-500" />
-                ) : (
-                  <Copy className="h-3.5 w-3.5" />
-                )}
-                {copied ? "Copied" : "Copy"}
-              </Button>
-            </div>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Waiting for confirmation...
-          </p>
-        </div>
-      )}
-
-      {testResult && (
-        <p className="text-xs text-muted-foreground">{testResult}</p>
-      )}
-    </div>
-  );
-}
-
-function PageShell({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="w-full max-w-3xl mx-auto p-4 md:px-6 md:py-12 flex flex-col gap-6">
-      <header className="flex flex-col gap-1">
-        <h1 className="text-xl md:text-2xl font-semibold tracking-tight">
-          Subscriptions
+        <h1 className="mt-3 font-display text-4xl sm:text-5xl font-semibold tracking-tight">
+          Your alert <span className="italic text-primary">command center</span>
         </h1>
-        <p className="text-sm text-muted-foreground">
-          Products you&apos;re watching for availability alerts
+        <p className="mt-3 max-w-2xl text-muted-foreground">
+          Pick how you want to hear about restocks, and manage the products
+          you&apos;re watching. You&apos;ll only get pinged the moment stock is
+          back.
         </p>
-      </header>
-      {children}
-    </div>
-  );
-}
+      </section>
 
-function LoadingSkeleton() {
-  return (
-    <div className="flex flex-col gap-6">
-      {[1, 2].map((i) => (
-        <div key={i} className="flex flex-col gap-2">
-          <Skeleton className="h-4 w-24" />
-          <div className="flex flex-col gap-1.5">
-            {[1, 2, 3].map((j) => (
-              <Skeleton key={j} className="h-12 w-full rounded-xl" />
+      {/* CHANNELS */}
+      <section className="mt-8">
+        <h2 className="mb-4 font-display text-xl font-semibold">
+          Subscription channels
+        </h2>
+        <div className="grid gap-5 md:grid-cols-2">
+          {push.state === "loading" ? (
+            <ChannelCardSkeleton />
+          ) : (
+            <ChannelCard
+              title="Web push notifications"
+              description={pushDescription}
+              enabled={pushSubscribed}
+              onToggle={handlePushToggle}
+              onTest={handlePushTest}
+              actionLabel={pushSubscribed ? "Disable" : "Enable"}
+              icon={<BellRing className="h-6 w-6" />}
+              accent="primary"
+              disabled={pushUnsupported || pushDenied}
+            />
+          )}
+          {telegram.isLoading ? (
+            <ChannelCardSkeleton />
+          ) : (
+            <ChannelCard
+              title="Telegram notifications"
+              description={telegramDescription}
+              enabled={telegram.connected}
+              onToggle={handleTelegramToggle}
+              onTest={handleTelegramTest}
+              actionLabel={
+                telegram.pending
+                  ? "Cancel"
+                  : telegram.connected
+                    ? "Disconnect"
+                    : "Connect"
+              }
+              icon={<Send className="h-6 w-6" />}
+              accent="accent"
+              busy={telegram.busy}
+            >
+              {telegram.pending && (
+                <div className="mt-4 flex flex-col gap-3 rounded-xl bg-muted/50 px-3 py-3">
+                  <div className="flex flex-col gap-1">
+                    <p className="text-xs font-medium">
+                      Step 1 - Open the bot in Telegram
+                    </p>
+                    <a
+                      href={`https://t.me/${telegram.pending.botUsername}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex w-fit items-center gap-1.5 text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                    >
+                      <ExternalLink className="h-3 w-3" />@
+                      {telegram.pending.botUsername}
+                    </a>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <p className="text-xs font-medium">
+                      Step 2 - Copy and send this command to the bot
+                    </p>
+                    <div className="flex flex-col md:flex-row md:items-center gap-2">
+                      <code className="flex-1 rounded-md border bg-background px-2.5 py-1.5 font-mono text-xs break-all">
+                        {telegram.startCommand}
+                      </code>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={telegram.copyStartCommand}
+                        className="shrink-0 gap-1.5"
+                      >
+                        {telegram.copied ? (
+                          <CheckCheck className="h-3.5 w-3.5 text-green-500" />
+                        ) : (
+                          <Copy className="h-3.5 w-3.5" />
+                        )}
+                        {telegram.copied ? "Copied" : "Copy"}
+                      </Button>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Waiting for confirmation...
+                  </p>
+                </div>
+              )}
+            </ChannelCard>
+          )}
+        </div>
+      </section>
+
+      <section className="mt-12 pb-16">
+        <div className="mb-4 flex items-end justify-between">
+          <div>
+            {isLoading ? (
+              <Skeleton className="h-7 w-40" />
+            ) : (
+              <h2 className="font-display text-xl font-semibold">
+                Watching {subs.length} product{subs.length === 1 ? "" : "s"}
+              </h2>
+            )}
+            <p className="mt-1 text-sm text-muted-foreground">
+              We&apos;ll ping you across your enabled channels.
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            className="rounded-xl"
+            nativeButton={false}
+            render={<Link href="/">Add more</Link>}
+          ></Button>
+        </div>
+
+        {isLoading ? (
+          <SubscriptionListSkeleton />
+        ) : subs.length === 0 ? (
+          <div className="milk-card rounded-3xl p-12 text-center">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+              <Bell className="h-7 w-7" />
+            </div>
+            <h3 className="mt-4 font-display text-2xl font-semibold">
+              No subscriptions yet
+            </h3>
+            <p className="mt-2 text-muted-foreground">
+              Browse Amul products and hit &quot;Notify me&quot; to start
+              watching.
+            </p>
+            <Button
+              className="mt-6 rounded-xl"
+              nativeButton={false}
+              render={<Link href="/">Browse products</Link>}
+            ></Button>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {subs.map((sub) => (
+              <SubscriptionRow
+                key={sub.id}
+                sub={sub}
+                disabled={unsubscribeMutation.isPending}
+                onRemove={() =>
+                  unsubscribeMutation.mutate(sub.id, {
+                    onSuccess: () => {
+                      toast("Unsubscribed", { description: sub.productName });
+                    },
+                  })
+                }
+              />
             ))}
           </div>
-        </div>
+        )}
+      </section>
+    </>
+  );
+}
+
+function SubscriptionListSkeleton() {
+  return (
+    <div className="flex flex-col gap-3">
+      {[1, 2, 3].map((i) => (
+        <Skeleton key={i} className="h-20 w-full rounded-2xl" />
       ))}
     </div>
   );
