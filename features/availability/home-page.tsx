@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -9,6 +10,7 @@ import {
   useQueryStates,
 } from "nuqs";
 import {
+  BellOff,
   Grid2x2,
   ListIcon,
   MapPin,
@@ -32,11 +34,13 @@ import { QUERY_KEYS } from "@/constants/query-keys";
 import { CATEGORIES } from "@/lib/constants";
 import type { ServerSession } from "@/lib/get-server-session";
 import { useSession } from "@/hooks/use-session";
+import { useChannelsStatus } from "@/hooks/use-channels-status";
 import type { ProductAvailability } from "@/types/amul";
 import ProductCardGrid from "./product-card-grid";
 import ProductCardList from "./product-card-list";
 import { PincodePanel, ViewToggle } from "./components";
 import { SignInDialog } from "./sign-in-dialog";
+import { NoChannelsDialog } from "./no-channels-dialog";
 
 type AvailabilityResponse = { results: ProductAvailability[]; total: number };
 type SubscriptionRecord = {
@@ -72,10 +76,14 @@ export function HomePage({
   const [signInOpen, setSignInOpen] = useState(false);
   const [pendingProduct, setPendingProduct] =
     useState<ProductAvailability | null>(null);
+  const [noChannelsOpen, setNoChannelsOpen] = useState(false);
+  const [pendingChannelProduct, setPendingChannelProduct] =
+    useState<ProductAvailability | null>(null);
 
   const { data: session, refetch: refetchSession } =
     useSession(initialSession);
   const queryClient = useQueryClient();
+  const { hasAnyChannel } = useChannelsStatus(!!session);
 
   const didAutoFill = useRef(false);
   useEffect(() => {
@@ -162,6 +170,19 @@ export function HomePage({
     subscriptions?.map((s) => [s.productId, s.id]) ?? [],
   );
 
+  const { data: allSubscriptions } = useQuery<SubscriptionRecord[]>({
+    queryKey: QUERY_KEYS.allSubscriptions(),
+    queryFn: async ({ signal }) => {
+      const res = await fetch("/api/subscriptions", { signal });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!session,
+  });
+
+  const showNoChannelsBanner =
+    !!session && (allSubscriptions?.length ?? 0) > 0 && !hasAnyChannel;
+
   const [mutatingProductId, setMutatingProductId] = useState<string | null>(
     null,
   );
@@ -209,8 +230,13 @@ export function HomePage({
       setSignInOpen(true);
       return;
     }
-    setMutatingProductId(product.productId);
     const subId = subscribedMap.get(product.productId);
+    if (!subId && !hasAnyChannel) {
+      setPendingChannelProduct(product);
+      setNoChannelsOpen(true);
+      return;
+    }
+    setMutatingProductId(product.productId);
     if (subId) {
       unsubscribeMutation.mutate(subId);
     } else {
@@ -222,6 +248,14 @@ export function HomePage({
     if (pendingProduct) {
       subscribeMutation.mutate(pendingProduct);
       setPendingProduct(null);
+    }
+  }
+
+  function handleSubscribeAnyway() {
+    if (pendingChannelProduct) {
+      setMutatingProductId(pendingChannelProduct.productId);
+      subscribeMutation.mutate(pendingChannelProduct);
+      setPendingChannelProduct(null);
     }
   }
 
@@ -280,6 +314,34 @@ export function HomePage({
           </div>
         </section>
 
+        {/* NO CHANNELS WARNING */}
+        {showNoChannelsBanner && (
+          <section className="mx-auto max-w-7xl px-4 sm:px-6 pb-6">
+            <div className="milk-card flex flex-col gap-3 rounded-2xl border border-warning/30 bg-warning/15 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-warning/20 text-warning-foreground">
+                  <BellOff className="h-4.5 w-4.5" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-warning-foreground">
+                    You&apos;re watching products but won&apos;t get notified
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    You haven&apos;t enabled any notification channel yet.
+                    Turn one on to receive restock alerts.
+                  </p>
+                </div>
+              </div>
+              <Button
+                size="sm"
+                className="shrink-0"
+                nativeButton={false}
+                render={<Link href="/subscriptions">Enable a channel</Link>}
+              ></Button>
+            </div>
+          </section>
+        )}
+
         {/* CONTROLS */}
         {(hasPincode || isPincodePending) && (
           <>
@@ -305,7 +367,7 @@ export function HomePage({
                     });
                   }}
                 >
-                  <SelectTrigger className="h-11! md:w-56 bg-background/70 rounded-lg">
+                  <SelectTrigger className="h-11! w-full md:w-56 bg-background/70 rounded-lg">
                     <SelectValue>
                       {
                         CATEGORIES.find((c) => c.alias === params.category)
@@ -322,7 +384,7 @@ export function HomePage({
                   </SelectContent>
                 </Select>
 
-                <div className="flex items-center gap-1 rounded-lg border bg-background/70 p-1 w-fit">
+                <div className="flex items-center gap-1 rounded-lg border bg-background/70 p-1 sm:w-fit">
                   <ViewToggle
                     active={params.view === "grid"}
                     onClick={() => setParams({ view: "grid" })}
@@ -516,6 +578,15 @@ export function HomePage({
           if (!open) setPendingProduct(null);
         }}
         onSuccess={handleSignInSuccess}
+      />
+
+      <NoChannelsDialog
+        open={noChannelsOpen}
+        onOpenChange={(open) => {
+          setNoChannelsOpen(open);
+          if (!open) setPendingChannelProduct(null);
+        }}
+        onSubscribeAnyway={handleSubscribeAnyway}
       />
     </div>
   );

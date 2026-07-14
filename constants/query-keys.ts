@@ -18,5 +18,7 @@ export const QUERY_KEYS = {
 
   emailStatus: () => ["email", "status"] as const,
 
+  channelsStatus: () => ["channels", "status"] as const,
+
   coupons: () => ["coupons"] as const,
 };
