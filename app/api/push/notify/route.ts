@@ -20,6 +20,7 @@ function buildStockMessageBody(
   return [
     productName,
     `${price} • Pincode ${pincode} • ${quantity} available`,
+    product.productUrl,
     `Manage your subscriptions at ${SITE_URL}/subscriptions`,
   ].join("\n");
 }
