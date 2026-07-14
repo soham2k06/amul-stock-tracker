@@ -2,14 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendPushNotification } from "@/lib/webpush";
 import { sendTelegramMessage } from "@/lib/telegram";
+import { sendStockAlertEmail } from "@/lib/email";
 import { searchAmulProducts } from "@/lib/amul/client";
+import { getSiteUrl } from "@/lib/site-url";
 import type { ProductAvailability } from "@/types/amul";
 
 const LOW_STOCK_THRESHOLD = 5;
-const SITE_URL = (process.env.BETTER_AUTH_URL ?? "http://localhost:3000").replace(
-  /\/$/,
-  "",
-);
+const SITE_URL = getSiteUrl();
 
 function buildStockMessageBody(
   productName: string,
@@ -28,7 +27,9 @@ function buildStockMessageBody(
 async function runNotifications() {
   const subscriptions = await prisma.subscription.findMany({
     include: {
-      user: { include: { pushSubscriptions: true, telegramConnection: true } },
+      user: {
+        include: { pushSubscriptions: true, telegramConnection: true },
+      },
     },
   });
 
@@ -88,6 +89,19 @@ async function runNotifications() {
             sub.user.telegramConnection.chatId,
             `${title}\n${body}`,
           ).catch(() => null);
+          notified++;
+        }
+
+        if (
+          sub.user.emailNotificationsEnabled &&
+          sub.user.notificationEmail &&
+          sub.user.notificationEmailVerified
+        ) {
+          await sendStockAlertEmail(sub.user.notificationEmail, {
+            title,
+            body,
+            url: `${SITE_URL}${url}`,
+          }).catch(() => null);
           notified++;
         }
       }

@@ -11,14 +11,17 @@ import {
   CheckCheck,
   Copy,
   ExternalLink,
+  Mail,
   Send,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { ServerSession } from "@/lib/get-server-session";
 import { useSession } from "@/hooks/use-session";
 import { usePushSubscription } from "@/hooks/use-push-subscription";
 import { useTelegramConnection } from "@/hooks/use-telegram-connection";
+import { useEmailNotifications } from "@/hooks/use-email-notifications";
 import ChannelCard, { ChannelCardSkeleton } from "../channel-card";
 import { toast } from "sonner";
 import SubscriptionRow from "../subscription-row";
@@ -139,6 +142,57 @@ export function SubscriptionsPage({
     : telegram.pending
       ? "Waiting for you to connect in Telegram..."
       : "Get instant Amul restock alerts delivered to your Telegram. Fastest channel — perfect for popular protein drops that sell out in minutes.";
+
+  const email = useEmailNotifications();
+  const [emailInputOverride, setEmailInputOverride] = useState<string | null>(
+    null,
+  );
+  const emailInput = emailInputOverride ?? email.address;
+
+  const [showEmailForm, setShowEmailForm] = useState(false);
+  // Once a change settles (verified, nothing pending), collapse the form
+  // back down - covers both first load and after switching to a new email.
+  // Adjusted during render (React's recommended pattern for resetting state
+  // in response to a prop/query change) rather than in an effect.
+  const [settledKey, setSettledKey] = useState<boolean>(false);
+  const isSettled = email.verified && !email.pendingEmail;
+  if (isSettled !== settledKey) {
+    setSettledKey(isSettled);
+    if (isSettled) setShowEmailForm(false);
+  }
+
+  async function handleEmailToggle() {
+    try {
+      await email.toggle();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Something went wrong");
+    }
+  }
+
+  async function handleEmailTest() {
+    try {
+      await email.sendTest();
+      toast.success("Test email sent");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to send test");
+    }
+  }
+
+  async function handleEmailVerifySubmit(e: React.FormEvent) {
+    e.preventDefault();
+    try {
+      await email.setEmail(emailInput);
+      toast.success("Verification email sent - check your inbox");
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Failed to send verification email",
+      );
+    }
+  }
+
+  const emailDescription = email.verified
+    ? `Restock alerts will be sent to ${email.address}.`
+    : "Verify your email to get restock alerts delivered to your inbox.";
 
   if (!session) {
     return (
@@ -261,6 +315,84 @@ export function SubscriptionsPage({
                     Waiting for confirmation...
                   </p>
                 </div>
+              )}
+            </ChannelCard>
+          )}
+          {email.isLoading ? (
+            <ChannelCardSkeleton />
+          ) : (
+            <ChannelCard
+              title="Email notifications"
+              description={emailDescription}
+              enabled={email.enabled}
+              onToggle={handleEmailToggle}
+              onTest={handleEmailTest}
+              actionLabel={email.enabled ? "Disable" : "Enable"}
+              icon={<Mail className="h-6 w-6" />}
+              accent="primary"
+              disabled={!email.verified}
+              busy={email.busy}
+            >
+              {email.verified && !showEmailForm && !email.pendingEmail && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEmailInputOverride("");
+                    setShowEmailForm(true);
+                  }}
+                  className="mt-3 text-xs font-medium text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                >
+                  Change email
+                </button>
+              )}
+              {(!email.verified || showEmailForm || email.pendingEmail) && (
+                <form
+                  onSubmit={handleEmailVerifySubmit}
+                  className="mt-4 flex flex-col gap-2 rounded-xl bg-muted/50 px-3 py-3"
+                >
+                  <p className="text-xs font-medium">
+                    {email.verified
+                      ? "Verify a new address to switch where alerts are sent."
+                      : "Add and verify an email address to receive restock alerts there."}
+                  </p>
+                  <div className="flex flex-col md:flex-row gap-2">
+                    <Input
+                      type="email"
+                      required
+                      value={emailInput}
+                      onChange={(e) => setEmailInputOverride(e.target.value)}
+                      placeholder="you@example.com"
+                      className="flex-1"
+                    />
+                    <Button
+                      type="submit"
+                      variant="outline"
+                      disabled={email.busy || !emailInput}
+                      className="shrink-0 h-11"
+                    >
+                      Verify
+                    </Button>
+                    {email.verified && !email.pendingEmail && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        disabled={email.busy}
+                        onClick={() => {
+                          setEmailInputOverride(null);
+                          setShowEmailForm(false);
+                        }}
+                        className="shrink-0 h-11"
+                      >
+                        Cancel
+                      </Button>
+                    )}
+                  </div>
+                  {email.pendingEmail && (
+                    <p className="text-xs text-muted-foreground">
+                      Check {email.pendingEmail} for a confirmation link...
+                    </p>
+                  )}
+                </form>
               )}
             </ChannelCard>
           )}

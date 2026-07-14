@@ -8,35 +8,41 @@ datasource db {
 }
 
 model User {
-    id                  String               @id @map("_id")
-    name                String
-    email               String
-    emailVerified       Boolean              @default(false)
-    image               String?
-    pincode             String?
-    createdAt           DateTime             @default(now())
-    updatedAt           DateTime             @updatedAt
-    sessions            Session[]
-    accounts            Account[]
-    subscriptions       Subscription[]
-    pushSubscriptions   PushSubscription[]
-    telegramConnection  TelegramConnection?
+    id                        String              @id @map("_id")
+    name                      String
+    email                     String
+    emailVerified             Boolean             @default(false)
+    username                  String?
+    displayUsername           String?
+    image                     String?
+    pincode                   String?
+    emailNotificationsEnabled Boolean             @default(false)
+    notificationEmail         String?
+    notificationEmailVerified Boolean             @default(false)
+    createdAt                 DateTime            @default(now())
+    updatedAt                 DateTime            @updatedAt
+    sessions                  Session[]
+    accounts                  Account[]
+    subscriptions             Subscription[]
+    pushSubscriptions         PushSubscription[]
+    telegramConnection        TelegramConnection?
 
     @@unique([email])
+    @@unique([username])
     @@map("user")
 }
 
 model Subscription {
-    id            String    @id @default(auto()) @map("_id") @db.ObjectId
+    id            String   @id @default(auto()) @map("_id") @db.ObjectId
     userId        String
-    user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+    user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
     productId     String
     productName   String
     pincode       String
     lastAvailable Boolean?
     lastLowStock  Boolean?
-    createdAt     DateTime  @default(now())
-    updatedAt     DateTime  @updatedAt
+    createdAt     DateTime @default(now())
+    updatedAt     DateTime @updatedAt
 
     @@unique([userId, productId, pincode])
     @@index([userId])
@@ -125,4 +131,16 @@ model TelegramToken {
 
     @@index([userId])
     @@map("telegram_token")
+}
+
+model NotificationEmailToken {
+    id        String   @id @default(auto()) @map("_id") @db.ObjectId
+    userId    String
+    email     String
+    token     String   @unique
+    expiresAt DateTime
+    createdAt DateTime @default(now())
+
+    @@index([userId])
+    @@map("notification_email_token")
 }

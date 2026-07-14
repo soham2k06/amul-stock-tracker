@@ -25,7 +25,7 @@ type Props = {
 export function SignInDialog({ open, onOpenChange, onSuccess }: Props) {
   const [mode, setMode] = useState<Mode>("signin");
   const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -42,10 +42,21 @@ export function SignInDialog({ open, onOpenChange, onSuccess }: Props) {
     setLoading(true);
     try {
       if (mode === "signin") {
-        const result = await authClient.signIn.email({ email, password, rememberMe });
+        const result = await authClient.signIn.username({
+          username,
+          password,
+          rememberMe,
+        });
         if (result.error) throw new Error(result.error.message ?? "Sign in failed");
       } else {
-        const result = await authClient.signUp.email({ email, password, name });
+        // better-auth's core still requires an email on every account; this
+        // one is never shown or contacted - login is username-only.
+        const result = await authClient.signUp.email({
+          email: `${username}@users.noreply.invalid`,
+          password,
+          name,
+          username,
+        });
         if (result.error) throw new Error(result.error.message ?? "Sign up failed");
       }
       onSuccess?.();
@@ -83,12 +94,12 @@ export function SignInDialog({ open, onOpenChange, onSuccess }: Props) {
             />
           )}
           <Input
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            type="text"
+            placeholder="Username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
             required
-            autoComplete="email"
+            autoComplete="username"
           />
           <Input
             type="password"

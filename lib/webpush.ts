@@ -23,7 +23,12 @@ export async function sendPushNotification(
     return "sent";
   } catch (err) {
     const status = (err as { statusCode?: number }).statusCode;
-    if (status === 410 || status === 404) return "expired";
+    // 410/404: the browser's push service no longer has this subscription.
+    // 401/403: the subscription was created under a different VAPID key
+    // (e.g. after a key rotation) and can never succeed again either way.
+    if (status === 410 || status === 404 || status === 401 || status === 403) {
+      return "expired";
+    }
     throw err;
   }
 }

@@ -1,6 +1,13 @@
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
+import { username } from "better-auth/plugins";
 import { prisma } from "./prisma";
+
+// Login is username-based. better-auth's core still requires an `email` on
+// every user record, so sign-up sends a synthetic, never-contacted address
+// (see sign-in-dialog.tsx) - hence username needs to accept the wider
+// character set of a legacy account's email-shaped username too.
+const usernamePattern = /^[a-zA-Z0-9_.@+-]+$/;
 
 export const auth = betterAuth({
   rateLimit: {
@@ -30,4 +37,9 @@ export const auth = betterAuth({
       },
     },
   },
+  plugins: [
+    username({
+      usernameValidator: (value) => usernamePattern.test(value),
+    }),
+  ],
 });

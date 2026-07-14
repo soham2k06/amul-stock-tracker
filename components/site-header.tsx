@@ -86,7 +86,7 @@ export function SiteHeader({
                   >
                     <User className="h-4 w-4" />
                     <span className="hidden sm:inline max-w-40 truncate">
-                      {session.user.email}
+                      {session.user.displayUsername ?? session.user.username}
                     </span>
                   </Button>
                 }
@@ -94,7 +94,7 @@ export function SiteHeader({
               <DropdownMenuContent align="end">
                 <DropdownMenuGroup>
                   <DropdownMenuLabel className="max-w-56 truncate">
-                    {session.user.email}
+                    {session.user.displayUsername ?? session.user.username}
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem

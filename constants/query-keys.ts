@@ -16,5 +16,7 @@ export const QUERY_KEYS = {
 
   telegramStatus: () => ["telegram", "status"] as const,
 
+  emailStatus: () => ["email", "status"] as const,
+
   coupons: () => ["coupons"] as const,
 };
