@@ -166,7 +166,7 @@ function ViewToggle({
   return (
     <button
       onClick={onClick}
-      className={`inline-flex items-center gap-1.5 rounded-sm px-3 py-1.5 text-xs font-medium transition ${
+      className={`inline-flex items-center gap-1.5 w-full justify-center sm:justify-start sm:w-fit rounded-sm px-3 py-1.5 text-xs font-medium transition ${
         active
           ? "bg-primary text-primary-foreground shadow-sm"
           : "text-muted-foreground hover:text-foreground"
@@ -181,7 +181,7 @@ function ViewToggle({
 function StockBadge({ p }: { p: ProductAvailability }) {
   if (!p.available) {
     return (
-      <div className="bg-background">
+      <div className="bg-background w-fit rounded-xl h-6 relative inline-flex">
         <Badge
           variant="secondary"
           className="gap-1 bg-destructive/10 text-destructive border-destructive/20"
@@ -194,7 +194,7 @@ function StockBadge({ p }: { p: ProductAvailability }) {
   }
   const low = (p.inventoryQuantity ?? 0) < 10;
   return (
-    <div className="bg-background">
+    <div className="bg-background w-fit rounded-xl h-6 relative inline-flex">
       <Badge
         className={`gap-1 border ${
           low

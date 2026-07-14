@@ -37,9 +37,9 @@ function ChannelCard({
       <div className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-primary/5 blur-2xl" />
       <div className="relative">
         <div className="flex items-start justify-between gap-4">
-          <div className="flex items-center gap-3">
+          <div className="flex sm:items-center gap-3">
             <div
-              className={`flex h-12 w-12 items-center justify-center rounded-2xl bg-linear-to-br ${ring} text-primary-foreground shadow-md`}
+              className={`flex h-12 w-12 items-center justify-center rounded-2xl bg-linear-to-br ${ring} text-primary-foreground shadow-md shrink-0`}
             >
               {icon}
             </div>

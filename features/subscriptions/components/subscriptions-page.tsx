@@ -19,6 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { ServerSession } from "@/lib/get-server-session";
 import { useSession } from "@/hooks/use-session";
+import { usePincodeParam, withPincode } from "@/hooks/use-pincode-param";
 import { usePushSubscription } from "@/hooks/use-push-subscription";
 import { useTelegramConnection } from "@/hooks/use-telegram-connection";
 import { useEmailNotifications } from "@/hooks/use-email-notifications";
@@ -38,6 +39,7 @@ export function SubscriptionsPage({
   initialSession?: ServerSession;
 }) {
   const { data: session } = useSession(initialSession);
+  const pincode = usePincodeParam();
   const [signInOpen, setSignInOpen] = useState(false);
   const queryClient = useQueryClient();
 
@@ -417,7 +419,7 @@ export function SubscriptionsPage({
             variant="outline"
             className="rounded-xl"
             nativeButton={false}
-            render={<Link href="/">Add more</Link>}
+            render={<Link href={withPincode("/", pincode)}>Add more</Link>}
           ></Button>
         </div>
 
@@ -438,7 +440,7 @@ export function SubscriptionsPage({
             <Button
               className="mt-6 rounded-xl"
               nativeButton={false}
-              render={<Link href="/">Browse products</Link>}
+              render={<Link href={withPincode("/", pincode)}>Browse products</Link>}
             ></Button>
           </div>
         ) : (

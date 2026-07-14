@@ -35,6 +35,7 @@ import { CATEGORIES } from "@/lib/constants";
 import type { ServerSession } from "@/lib/get-server-session";
 import { useSession } from "@/hooks/use-session";
 import { useChannelsStatus } from "@/hooks/use-channels-status";
+import { withPincode } from "@/hooks/use-pincode-param";
 import type { ProductAvailability } from "@/types/amul";
 import ProductCardGrid from "./product-card-grid";
 import ProductCardList from "./product-card-list";
@@ -80,8 +81,7 @@ export function HomePage({
   const [pendingChannelProduct, setPendingChannelProduct] =
     useState<ProductAvailability | null>(null);
 
-  const { data: session, refetch: refetchSession } =
-    useSession(initialSession);
+  const { data: session, refetch: refetchSession } = useSession(initialSession);
   const queryClient = useQueryClient();
   const { hasAnyChannel } = useChannelsStatus(!!session);
 
@@ -327,8 +327,8 @@ export function HomePage({
                     You&apos;re watching products but won&apos;t get notified
                   </p>
                   <p className="text-sm text-muted-foreground">
-                    You haven&apos;t enabled any notification channel yet.
-                    Turn one on to receive restock alerts.
+                    You haven&apos;t enabled any notification channel yet. Turn
+                    one on to receive restock alerts.
                   </p>
                 </div>
               </div>
@@ -336,7 +336,11 @@ export function HomePage({
                 size="sm"
                 className="shrink-0"
                 nativeButton={false}
-                render={<Link href="/subscriptions">Enable a channel</Link>}
+                render={
+                  <Link href={withPincode("/subscriptions", params.pincode)}>
+                    Enable a channel
+                  </Link>
+                }
               ></Button>
             </div>
           </section>
@@ -507,7 +511,7 @@ export function HomePage({
                           Page {currentPage} of {totalPages}
                         </span>
                       </div>
-                      <div className="flex items-center gap-1">
+                      <div className="grid grid-cols-2 sm:flex items-center gap-1">
                         <Button
                           variant="outline"
                           size="sm"
@@ -587,6 +591,7 @@ export function HomePage({
           if (!open) setPendingChannelProduct(null);
         }}
         onSubscribeAnyway={handleSubscribeAnyway}
+        pincode={params.pincode}
       />
     </div>
   );
