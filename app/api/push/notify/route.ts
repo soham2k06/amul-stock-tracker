@@ -5,6 +5,8 @@ import { sendTelegramMessage } from "@/lib/telegram";
 import { sendStockAlertEmail } from "@/lib/email";
 import { searchAmulProducts } from "@/lib/amul/client";
 import { getSiteUrl } from "@/lib/site-url";
+import { logNotification } from "@/lib/notification-log";
+import type { NotificationType } from "@prisma/client";
 import type { ProductAvailability } from "@/types/amul";
 
 const LOW_STOCK_THRESHOLD = 5;
@@ -75,22 +77,65 @@ async function runNotifications() {
         const title = cameBackInStock ? "Back in stock" : `Only ${inventoryQuantity} left`;
         const body = buildStockMessageBody(sub.productName, product, pincode);
         const url = `/?pincode=${pincode}`;
+        const notificationType: NotificationType = cameBackInStock
+          ? "RESTOCK"
+          : "LOW_STOCK";
 
         for (const pushSub of sub.user.pushSubscriptions) {
-          const res = await sendPushNotification(pushSub, { title, body, url });
-          if (res === "expired") {
-            await prisma.pushSubscription.delete({ where: { id: pushSub.id } });
-          } else {
-            notified++;
+          try {
+            const res = await sendPushNotification(pushSub, { title, body, url });
+            if (res === "expired") {
+              await prisma.pushSubscription.delete({ where: { id: pushSub.id } });
+            } else {
+              notified++;
+              await logNotification({
+                userId: sub.userId,
+                channel: "PUSH",
+                type: notificationType,
+                productId: sub.productId,
+                productName: sub.productName,
+                status: "SENT",
+              });
+            }
+          } catch (err) {
+            await logNotification({
+              userId: sub.userId,
+              channel: "PUSH",
+              type: notificationType,
+              productId: sub.productId,
+              productName: sub.productName,
+              status: "FAILED",
+              error: err instanceof Error ? err.message : "Unknown error",
+            });
           }
         }
 
         if (sub.user.telegramConnection) {
-          await sendTelegramMessage(
-            sub.user.telegramConnection.chatId,
-            `${title}\n${body}`,
-          ).catch(() => null);
-          notified++;
+          try {
+            await sendTelegramMessage(
+              sub.user.telegramConnection.chatId,
+              `${title}\n${body}`,
+            );
+            notified++;
+            await logNotification({
+              userId: sub.userId,
+              channel: "TELEGRAM",
+              type: notificationType,
+              productId: sub.productId,
+              productName: sub.productName,
+              status: "SENT",
+            });
+          } catch (err) {
+            await logNotification({
+              userId: sub.userId,
+              channel: "TELEGRAM",
+              type: notificationType,
+              productId: sub.productId,
+              productName: sub.productName,
+              status: "FAILED",
+              error: err instanceof Error ? err.message : "Unknown error",
+            });
+          }
         }
 
         if (
@@ -98,12 +143,32 @@ async function runNotifications() {
           sub.user.notificationEmail &&
           sub.user.notificationEmailVerified
         ) {
-          await sendStockAlertEmail(sub.user.notificationEmail, {
-            title,
-            body,
-            url: `${SITE_URL}${url}`,
-          }).catch(() => null);
-          notified++;
+          try {
+            await sendStockAlertEmail(sub.user.notificationEmail, {
+              title,
+              body,
+              url: `${SITE_URL}${url}`,
+            });
+            notified++;
+            await logNotification({
+              userId: sub.userId,
+              channel: "EMAIL",
+              type: notificationType,
+              productId: sub.productId,
+              productName: sub.productName,
+              status: "SENT",
+            });
+          } catch (err) {
+            await logNotification({
+              userId: sub.userId,
+              channel: "EMAIL",
+              type: notificationType,
+              productId: sub.productId,
+              productName: sub.productName,
+              status: "FAILED",
+              error: err instanceof Error ? err.message : "Unknown error",
+            });
+          }
         }
       }
 

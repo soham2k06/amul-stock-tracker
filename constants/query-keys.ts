@@ -21,4 +21,21 @@ export const QUERY_KEYS = {
   channelsStatus: () => ["channels", "status"] as const,
 
   coupons: () => ["coupons"] as const,
+
+  adminUsers: (params: { q: string; page: number }) =>
+    ["admin", "users", params] as const,
+
+  adminUser: (params: { id: string }) =>
+    ["admin", "users", "detail", params] as const,
+
+  adminSubscriptions: (params: { q: string; pincode: string; page: number }) =>
+    ["admin", "subscriptions", params] as const,
+
+  adminNotifications: (params: {
+    channel: string;
+    status: string;
+    page: number;
+  }) => ["admin", "notifications", params] as const,
+
+  adminAnalytics: () => ["admin", "analytics"] as const,
 };

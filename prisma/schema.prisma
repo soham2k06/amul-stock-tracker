@@ -1,146 +1,181 @@
 generator client {
-    provider = "prisma-client-js"
+  provider = "prisma-client-js"
 }
 
 datasource db {
-    provider = "mongodb"
-    url      = env("DATABASE_URL")
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
 }
 
 model User {
-    id                        String              @id @map("_id")
-    name                      String
-    email                     String
-    emailVerified             Boolean             @default(false)
-    username                  String?
-    displayUsername           String?
-    image                     String?
-    pincode                   String?
-    emailNotificationsEnabled Boolean             @default(false)
-    notificationEmail         String?
-    notificationEmailVerified Boolean             @default(false)
-    createdAt                 DateTime            @default(now())
-    updatedAt                 DateTime            @updatedAt
-    sessions                  Session[]
-    accounts                  Account[]
-    subscriptions             Subscription[]
-    pushSubscriptions         PushSubscription[]
-    telegramConnection        TelegramConnection?
+  id                        String              @id @map("_id")
+  name                      String
+  email                     String
+  emailVerified             Boolean             @default(false)
+  username                  String?
+  displayUsername           String?
+  image                     String?
+  pincode                   String?
+  emailNotificationsEnabled Boolean             @default(false)
+  notificationEmail         String?
+  notificationEmailVerified Boolean             @default(false)
+  createdAt                 DateTime            @default(now())
+  updatedAt                 DateTime            @updatedAt
+  sessions                  Session[]
+  accounts                  Account[]
+  subscriptions             Subscription[]
+  pushSubscriptions         PushSubscription[]
+  telegramConnection        TelegramConnection?
+  notificationLogs          NotificationLog[]
 
-    @@unique([email])
-    @@unique([username])
-    @@map("user")
+  @@unique([email])
+  @@unique([username])
+  @@map("user")
 }
 
 model Subscription {
-    id            String   @id @default(auto()) @map("_id") @db.ObjectId
-    userId        String
-    user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-    productId     String
-    productName   String
-    pincode       String
-    lastAvailable Boolean?
-    lastLowStock  Boolean?
-    createdAt     DateTime @default(now())
-    updatedAt     DateTime @updatedAt
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId     String
+  productName   String
+  pincode       String
+  lastAvailable Boolean?
+  lastLowStock  Boolean?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-    @@unique([userId, productId, pincode])
-    @@index([userId])
-    @@map("subscription")
+  @@unique([userId, productId, pincode])
+  @@index([userId])
+  @@map("subscription")
 }
 
 model PushSubscription {
-    id        String   @id @default(auto()) @map("_id") @db.ObjectId
-    userId    String
-    user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-    endpoint  String   @unique
-    p256dh    String
-    auth      String
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-    @@index([userId])
-    @@map("push_subscription")
+  @@index([userId])
+  @@map("push_subscription")
 }
 
 model Session {
-    id        String   @id @map("_id")
-    expiresAt DateTime
-    token     String
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
-    ipAddress String?
-    userAgent String?
-    userId    String
-    user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id        String   @id @map("_id")
+  expiresAt DateTime
+  token     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-    @@unique([token])
-    @@index([userId])
-    @@map("session")
+  @@unique([token])
+  @@index([userId])
+  @@map("session")
 }
 
 model Account {
-    id                    String    @id @map("_id")
-    accountId             String
-    providerId            String
-    userId                String
-    user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-    accessToken           String?
-    refreshToken          String?
-    idToken               String?
-    accessTokenExpiresAt  DateTime?
-    refreshTokenExpiresAt DateTime?
-    scope                 String?
-    password              String?
-    createdAt             DateTime  @default(now())
-    updatedAt             DateTime  @updatedAt
+  id                    String    @id @map("_id")
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
-    @@index([userId])
-    @@map("account")
+  @@index([userId])
+  @@map("account")
 }
 
 model Verification {
-    id         String   @id @map("_id")
-    identifier String
-    value      String
-    expiresAt  DateTime
-    createdAt  DateTime @default(now())
-    updatedAt  DateTime @updatedAt
+  id         String   @id @map("_id")
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-    @@index([identifier])
-    @@map("verification")
+  @@index([identifier])
+  @@map("verification")
 }
 
 model TelegramConnection {
-    id        String   @id @default(auto()) @map("_id") @db.ObjectId
-    userId    String   @unique
-    user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-    chatId    String   @unique
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chatId    String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-    @@map("telegram_connection")
+  @@map("telegram_connection")
 }
 
 model TelegramToken {
-    id        String   @id @default(auto()) @map("_id") @db.ObjectId
-    userId    String
-    token     String   @unique
-    expiresAt DateTime
-    createdAt DateTime @default(now())
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
 
-    @@index([userId])
-    @@map("telegram_token")
+  @@index([userId])
+  @@map("telegram_token")
 }
 
 model NotificationEmailToken {
-    id        String   @id @default(auto()) @map("_id") @db.ObjectId
-    userId    String
-    email     String
-    token     String   @unique
-    expiresAt DateTime
-    createdAt DateTime @default(now())
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String
+  email     String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
 
-    @@index([userId])
-    @@map("notification_email_token")
+  @@index([userId])
+  @@map("notification_email_token")
+}
+
+enum NotificationChannel {
+  PUSH
+  TELEGRAM
+  EMAIL
+}
+
+enum NotificationType {
+  RESTOCK
+  LOW_STOCK
+  TEST
+}
+
+enum NotificationStatus {
+  SENT
+  FAILED
+}
+
+model NotificationLog {
+  id          String              @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String
+  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  channel     NotificationChannel
+  type        NotificationType
+  productId   String?
+  productName String?
+  status      NotificationStatus
+  error       String?
+  createdAt   DateTime            @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("notification_log")
 }

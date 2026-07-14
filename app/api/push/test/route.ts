@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { sendPushNotification } from "@/lib/webpush";
+import { logNotification } from "@/lib/notification-log";
 
 export async function POST(request: NextRequest) {
   const session = await auth.api.getSession({ headers: request.headers });
@@ -37,6 +38,13 @@ export async function POST(request: NextRequest) {
   const sent = results.filter(
     (r) => r.status === "fulfilled" && r.value === "sent"
   ).length;
+
+  await logNotification({
+    userId: session.user.id,
+    channel: "PUSH",
+    type: "TEST",
+    status: sent > 0 ? "SENT" : "FAILED",
+  });
 
   return NextResponse.json({ sent, total: pushSubs.length });
 }

@@ -54,3 +54,15 @@ export async function sendTestEmail(to: string) {
     html: `<p>Email notifications are working correctly!</p>`,
   });
 }
+
+export async function sendAdminOtpEmail(to: string, code: string) {
+  await sendEmail({
+    to,
+    subject: "Your admin login code - Amul Stock Tracker",
+    html: `
+      <p>Your admin login code is:</p>
+      <p style="font-size: 24px; font-weight: bold; letter-spacing: 4px;">${code}</p>
+      <p>This code expires in 5 minutes. If you didn't request this, you can ignore this email.</p>
+    `,
+  });
+}
