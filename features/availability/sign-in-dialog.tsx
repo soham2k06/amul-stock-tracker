@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Eye, EyeOff } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -24,16 +25,17 @@ type Props = {
 
 export function SignInDialog({ open, onOpenChange, onSuccess }: Props) {
   const [mode, setMode] = useState<Mode>("signin");
-  const [name, setName] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   function switchMode(next: Mode) {
     setMode(next);
     setError(null);
+    setShowPassword(false);
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -54,7 +56,7 @@ export function SignInDialog({ open, onOpenChange, onSuccess }: Props) {
         const result = await authClient.signUp.email({
           email: `${username}@users.noreply.invalid`,
           password,
-          name,
+          name: username,
           username,
         });
         if (result.error) throw new Error(result.error.message ?? "Sign up failed");
@@ -83,16 +85,6 @@ export function SignInDialog({ open, onOpenChange, onSuccess }: Props) {
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-          {mode === "signup" && (
-            <Input
-              type="text"
-              placeholder="Name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-              autoComplete="name"
-            />
-          )}
           <Input
             type="text"
             placeholder="Username"
@@ -101,14 +93,29 @@ export function SignInDialog({ open, onOpenChange, onSuccess }: Props) {
             required
             autoComplete="username"
           />
-          <Input
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            autoComplete={mode === "signin" ? "current-password" : "new-password"}
-          />
+          <div className="relative">
+            <Input
+              type={showPassword ? "text" : "password"}
+              placeholder="Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              autoComplete={mode === "signin" ? "current-password" : "new-password"}
+              className="pr-10"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((prev) => !prev)}
+              className="absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground hover:text-foreground"
+              aria-label={showPassword ? "Hide password" : "Show password"}
+            >
+              {showPassword ? (
+                <EyeOff className="size-4" />
+              ) : (
+                <Eye className="size-4" />
+              )}
+            </button>
+          </div>
 
           {mode === "signin" && (
             <div className="flex items-center gap-2">
