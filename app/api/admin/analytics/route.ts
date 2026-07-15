@@ -56,8 +56,6 @@ export async function GET(request: NextRequest) {
     prisma.subscription.groupBy({
       by: ["productName"],
       _count: { _all: true },
-      orderBy: { _count: { productName: "desc" } },
-      take: 10,
     }),
   ]);
 
@@ -97,9 +95,9 @@ export async function GET(request: NextRequest) {
       date,
       ...notificationsByDay.get(date)!,
     })),
-    topProducts: topProductGroups.map((p) => ({
-      productName: p.productName,
-      count: p._count._all,
-    })),
+    topProducts: topProductGroups
+      .map((p) => ({ productName: p.productName, count: p._count._all }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10),
   });
 }

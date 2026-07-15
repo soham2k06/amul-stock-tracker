@@ -114,7 +114,7 @@ export function AdminUsersPage() {
               </TableRow>
             ) : (
               data?.users.map((user) => (
-                <TableRow key={user.id} className="h-11">
+                <TableRow key={user.id} className="h-12.5">
                   <TableCell>
                     <Link
                       href={`/admin/users/${user.id}`}

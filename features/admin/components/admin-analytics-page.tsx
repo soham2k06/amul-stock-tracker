@@ -216,7 +216,7 @@ export function AdminAnalyticsPage() {
             ) : (
               <ChartContainer config={topProductsConfig}>
                 <BarChart
-                  data={data.topProducts?.sort((a, b) => b.count - a.count)}
+                  data={[...data.topProducts].sort((a, b) => b.count - a.count)}
                   layout="vertical"
                   margin={{ left: -24 }}
                 >

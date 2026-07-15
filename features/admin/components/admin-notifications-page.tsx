@@ -158,7 +158,7 @@ export function AdminNotificationsPage() {
                   <TableCell>{log.channel}</TableCell>
                   <TableCell>{log.type}</TableCell>
                   <TableCell className="text-muted-foreground">
-                    {log.productName ?? "-"}
+                    {(log.productName ?? "-").replace(/amul/i, "")}
                   </TableCell>
                   <TableCell>
                     <Badge variant={log.status === "SENT" ? "secondary" : "destructive"}>

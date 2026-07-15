@@ -197,7 +197,9 @@ export function AdminUserDetailPage({ id }: { id: string }) {
               ) : (
                 user.subscriptions.map((sub) => (
                   <TableRow key={sub.id}>
-                    <TableCell>{sub.productName}</TableCell>
+                    <TableCell>
+                      {sub.productName.replace(/amul/i, "")}
+                    </TableCell>
                     <TableCell className="text-muted-foreground">
                       {sub.pincode}
                     </TableCell>

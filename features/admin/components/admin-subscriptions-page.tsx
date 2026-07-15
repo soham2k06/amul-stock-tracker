@@ -82,28 +82,36 @@ export function AdminSubscriptionsPage() {
           : "Loading..."}
       </p>
 
-      {data && data.topProducts.length > 0 && (
-        <Card className="mt-6">
-          <CardHeader>
-            <CardTitle>Top watched products</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap gap-6 text-sm">
-              {data.topProducts
-                .sort((a, b) => b.count - a.count)
-                .map((p) => (
-                  <div
-                    key={p.productName}
-                    className="flex items-baseline bg-background px-3 py-2 rounded-xl gap-1.5"
-                  >
-                    <span className="font-medium">{p.productName}</span>
-                    <span className="text-muted-foreground">x{p.count}</span>
-                  </div>
-                ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle>Top watched products</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap gap-6 text-sm">
+            {!isLoading && data?.topProducts ? (
+              data.topProducts.map((p) => (
+                <div
+                  key={p.productName}
+                  className="flex items-baseline bg-background px-3 py-2 rounded-xl gap-1.5"
+                >
+                  <span className="font-medium">
+                    {p.productName.replace(/amul/i, "")}
+                  </span>
+                  <span className="text-muted-foreground">x{p.count}</span>
+                </div>
+              ))
+            ) : (
+              <>
+                <Skeleton className="h-9 w-72" />
+                <Skeleton className="h-9 w-104" />
+                <Skeleton className="h-9 w-96" />
+                <Skeleton className="h-9 w-104" />
+                <Skeleton className="h-9 w-md" />
+              </>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="mt-6 flex flex-col gap-3 sm:flex-row">
         <Input
@@ -156,7 +164,7 @@ export function AdminSubscriptionsPage() {
               data?.subscriptions.map((sub) => (
                 <TableRow key={sub.id}>
                   <TableCell className="font-medium">
-                    {sub.productName}
+                    {sub.productName.replace(/amul/i, "")}
                   </TableCell>
                   <TableCell className="text-muted-foreground">
                     {sub.pincode}
