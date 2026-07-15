@@ -110,7 +110,7 @@ export function AdminAnalyticsPage() {
               <Skeleton className="aspect-video w-full" />
             ) : (
               <ChartContainer config={signupsConfig}>
-                <AreaChart data={data.signups} margin={{ left: -20 }}>
+                <AreaChart data={data.signups}>
                   <CartesianGrid vertical={false} stroke="var(--border)" />
                   <XAxis
                     dataKey="date"
@@ -155,7 +155,7 @@ export function AdminAnalyticsPage() {
               <Skeleton className="aspect-video w-full" />
             ) : (
               <ChartContainer config={notificationsConfig}>
-                <BarChart data={data.notifications} margin={{ left: -20 }}>
+                <BarChart data={data.notifications} >
                   <CartesianGrid vertical={false} stroke="var(--border)" />
                   <XAxis
                     dataKey="date"
@@ -218,7 +218,7 @@ export function AdminAnalyticsPage() {
                 <BarChart
                   data={[...data.topProducts].sort((a, b) => b.count - a.count)}
                   layout="vertical"
-                  margin={{ left: -24 }}
+                  margin={{ left: -36 }}
                 >
                   <CartesianGrid horizontal={false} stroke="var(--border)" />
                   <XAxis
