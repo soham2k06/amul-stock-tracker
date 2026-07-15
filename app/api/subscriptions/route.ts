@@ -32,7 +32,32 @@ export async function GET(request: NextRequest) {
     orderBy: [{ pincode: "asc" }, { createdAt: "asc" }],
   });
 
-  return NextResponse.json(subscriptions);
+  const productIds = [...new Set(subscriptions.map((s) => s.productId))];
+  const logs = productIds.length
+    ? await prisma.notificationLog.findMany({
+        where: {
+          userId: session.user.id,
+          productId: { in: productIds },
+          status: "SENT",
+        },
+        orderBy: { createdAt: "desc" },
+        select: { productId: true, createdAt: true },
+      })
+    : [];
+
+  const lastNotifiedByProduct = new Map<string, Date>();
+  for (const log of logs) {
+    if (log.productId && !lastNotifiedByProduct.has(log.productId)) {
+      lastNotifiedByProduct.set(log.productId, log.createdAt);
+    }
+  }
+
+  return NextResponse.json(
+    subscriptions.map((sub) => ({
+      ...sub,
+      lastNotifiedAt: lastNotifiedByProduct.get(sub.productId) ?? null,
+    })),
+  );
 }
 
 export async function POST(request: NextRequest) {

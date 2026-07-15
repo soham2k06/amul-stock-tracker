@@ -33,7 +33,7 @@ function ChannelCard({
     accent === "primary" ? "from-primary to-accent" : "from-accent to-primary";
   const isInteractionDisabled = disabled || busy;
   return (
-    <div className="milk-card relative overflow-hidden rounded-3xl p-6">
+    <div className="milk-card relative overflow-hidden rounded-3xl p-4 sm:p-6">
       <div className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-primary/5 blur-2xl" />
       <div className="relative">
         <div className="flex items-start justify-between gap-4">
@@ -100,7 +100,7 @@ function ChannelCard({
 
 function ChannelCardSkeleton() {
   return (
-    <div className="milk-card relative overflow-hidden rounded-3xl p-6">
+    <div className="milk-card relative overflow-hidden rounded-3xl p-4 sm:p-6">
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-center gap-3">
           <Skeleton className="h-12 w-12 rounded-2xl" />

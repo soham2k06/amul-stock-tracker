@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { formatDateTime } from "@/lib/utils";
 import { Subscription } from "@prisma/client";
 import { BellRing, ExternalLink, MapPin, Trash2 } from "lucide-react";
 
@@ -7,7 +8,9 @@ function SubscriptionRow({
   onRemove,
   disabled,
 }: {
-  sub: Pick<Subscription, "id" | "productName" | "pincode">;
+  sub: Pick<Subscription, "id" | "productName" | "pincode"> & {
+    lastNotifiedAt: string | null;
+  };
   onRemove: () => void;
   disabled?: boolean;
 }) {
@@ -19,9 +22,15 @@ function SubscriptionRow({
       </div>
       <div className="flex-1 min-w-0">
         <h3 className="truncate mb-1 font-semibold">{sub.productName}</h3>
-        <span className="inline-flex text-xs text-muted-foreground items-center gap-1">
-          <MapPin className="h-3.5 w-3.5" />
-          {sub.pincode}
+        <span className="inline-flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+          <span className="inline-flex items-center gap-1">
+            <MapPin className="h-3.5 w-3.5" />
+            {sub.pincode}
+          </span>
+          <span>
+            {sub.lastNotifiedAt &&
+              `Last notified ${formatDateTime(sub.lastNotifiedAt)}`}
+          </span>
         </span>
       </div>
       <div className="flex items-center gap-2">

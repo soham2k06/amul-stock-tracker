@@ -31,7 +31,7 @@ import { SignInDialog } from "@/features/availability/sign-in-dialog";
 type SubscriptionRecord = Pick<
   Subscription,
   "id" | "productId" | "productName" | "pincode"
->;
+> & { lastNotifiedAt: string | null };
 
 export function SubscriptionsPage({
   initialSession,
@@ -187,7 +187,9 @@ export function SubscriptionsPage({
       toast.success("Verification email sent - check your inbox");
     } catch (err) {
       toast.error(
-        err instanceof Error ? err.message : "Failed to send verification email",
+        err instanceof Error
+          ? err.message
+          : "Failed to send verification email",
       );
     }
   }
@@ -407,11 +409,11 @@ export function SubscriptionsPage({
             {isLoading ? (
               <Skeleton className="h-7 w-40" />
             ) : (
-              <h2 className="font-display text-xl font-semibold">
+              <h2 className="font-display text-base sm:text-xl font-semibold">
                 Watching {subs.length} product{subs.length === 1 ? "" : "s"}
               </h2>
             )}
-            <p className="mt-1 text-sm text-muted-foreground">
+            <p className="mt-1 text-xs sm:text-sm text-muted-foreground">
               We&apos;ll ping you across your enabled channels.
             </p>
           </div>
@@ -440,7 +442,9 @@ export function SubscriptionsPage({
             <Button
               className="mt-6 rounded-xl"
               nativeButton={false}
-              render={<Link href={withPincode("/", pincode)}>Browse products</Link>}
+              render={
+                <Link href={withPincode("/", pincode)}>Browse products</Link>
+              }
             ></Button>
           </div>
         ) : (
