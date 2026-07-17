@@ -1,4 +1,5 @@
 import { getDefaultSession } from "@/lib/amul/api";
+import { getAmulErrorMessage } from "@/lib/amul/error";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -23,7 +24,7 @@ export async function GET(request: NextRequest) {
     const records = await session.searchPincode(parsed.data.q);
     return NextResponse.json({ records });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
+    const message = getAmulErrorMessage(err);
     return NextResponse.json({ error: message }, { status: 502 });
   }
 }

@@ -1,7 +1,7 @@
 import type { AmulProduct, ProductAvailability } from "@/types/amul";
 import { STORE_ID, SUBSTORES } from "../constants";
 import { createAmulApi } from "./api";
-import { AMUL_ERROR_CODE, AmulError } from "./error";
+import { AMUL_ERROR_CODE, AmulError, getAmulErrorMessage } from "./error";
 
 export const getSubstores = async () => {
   return SUBSTORES;
@@ -132,7 +132,7 @@ export async function searchAmulProducts(
     ) {
       return { ok: false, error: "PINCODE_NOT_FOUND", message: err.message };
     }
-    const message = err instanceof Error ? err.message : "Unknown error";
+    const message = getAmulErrorMessage(err);
     return { ok: false, error: "FETCH_ERROR", message };
   }
 }
