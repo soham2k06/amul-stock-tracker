@@ -10,17 +10,17 @@ import { prisma } from "./prisma";
 const usernamePattern = /^[a-zA-Z0-9_.@+-]+$/;
 
 export const auth = betterAuth({
-  rateLimit: {
-    storage: "database",
-    window: 60 * 1000, // 1 minute
-    max: 10, // 10 requests per window
-    customRules: {
-      "/sign-up/email": {
-        window: 60 * 1000, // 1 minute
-        max: 1, // 1 request per window
-      },
-    },
-  },
+  // rateLimit: {
+  //   storage: "database",
+  //   window: 60 * 1000, // 1 minute
+  //   max: 10, // 10 requests per window
+  //   customRules: {
+  //     "/sign-up/email": {
+  //       window: 60 * 1000, // 1 minute
+  //       max: 1, // 1 request per window
+  //     },
+  //   },
+  // },
   emailAndPassword: {
     enabled: true,
   },
