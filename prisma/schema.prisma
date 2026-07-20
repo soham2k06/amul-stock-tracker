@@ -179,3 +179,13 @@ model NotificationLog {
   @@index([createdAt])
   @@map("notification_log")
 }
+
+model RateLimit {
+  id          String @id @map("_id")
+  key         String
+  count       Int
+  lastRequest BigInt
+
+  @@unique([key])
+  @@map("rateLimit")
+}

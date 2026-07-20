@@ -11,7 +11,7 @@ const usernamePattern = /^[a-zA-Z0-9_.@+-]+$/;
 
 export const auth = betterAuth({
   rateLimit: {
-    storage: "memory",
+    storage: "database",
     window: 60 * 1000, // 1 minute
     max: 10, // 10 requests per window
     customRules: {
