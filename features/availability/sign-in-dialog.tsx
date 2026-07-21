@@ -23,6 +23,25 @@ type Props = {
   onSuccess?: () => void;
 };
 
+// Mirrors the usernameValidator/min-max length in lib/auth.ts so bad
+// usernames are caught before the round trip to the server.
+const USERNAME_PATTERN = /^[a-zA-Z0-9_.@+-]+$/;
+const USERNAME_MIN_LENGTH = 3;
+const USERNAME_MAX_LENGTH = 30;
+
+function validateUsername(username: string): string | null {
+  if (username.length < USERNAME_MIN_LENGTH) {
+    return `Username must be at least ${USERNAME_MIN_LENGTH} characters`;
+  }
+  if (username.length > USERNAME_MAX_LENGTH) {
+    return `Username must be at most ${USERNAME_MAX_LENGTH} characters`;
+  }
+  if (!USERNAME_PATTERN.test(username)) {
+    return "Username can only contain letters, numbers, and _ . @ + -";
+  }
+  return null;
+}
+
 export function SignInDialog({ open, onOpenChange, onSuccess }: Props) {
   const [mode, setMode] = useState<Mode>("signin");
   const [username, setUsername] = useState("");
@@ -41,6 +60,15 @@ export function SignInDialog({ open, onOpenChange, onSuccess }: Props) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+
+    if (mode === "signup") {
+      const usernameError = validateUsername(username);
+      if (usernameError) {
+        setError(usernameError);
+        return;
+      }
+    }
+
     setLoading(true);
     try {
       if (mode === "signin") {
