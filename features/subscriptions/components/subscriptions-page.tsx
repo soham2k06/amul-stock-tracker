@@ -24,6 +24,7 @@ import { usePushSubscription } from "@/hooks/use-push-subscription";
 import { useTelegramConnection } from "@/hooks/use-telegram-connection";
 import { useEmailNotifications } from "@/hooks/use-email-notifications";
 import ChannelCard, { ChannelCardSkeleton } from "../channel-card";
+import RecoveryEmailCard from "../recovery-email-card";
 import { toast } from "sonner";
 import SubscriptionRow from "../subscription-row";
 import { SignInDialog } from "@/features/availability/sign-in-dialog";
@@ -400,6 +401,16 @@ export function SubscriptionsPage({
               )}
             </ChannelCard>
           )}
+        </div>
+      </section>
+
+      {/* ACCOUNT SECURITY */}
+      <section className="mt-8">
+        <h2 className="mb-4 font-display text-xl font-semibold">
+          Account security
+        </h2>
+        <div className="grid gap-5 md:grid-cols-2">
+          <RecoveryEmailCard />
         </div>
       </section>
 

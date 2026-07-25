@@ -19,6 +19,8 @@ model User {
   emailNotificationsEnabled Boolean             @default(false)
   notificationEmail         String?
   notificationEmailVerified Boolean             @default(false)
+  recoveryEmail             String?
+  recoveryEmailVerified     Boolean             @default(false)
   createdAt                 DateTime            @default(now())
   updatedAt                 DateTime            @updatedAt
   sessions                  Session[]
@@ -144,6 +146,29 @@ model NotificationEmailToken {
 
   @@index([userId])
   @@map("notification_email_token")
+}
+
+model RecoveryEmailToken {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String
+  email     String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("recovery_email_token")
+}
+
+model PasswordResetToken {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("password_reset_token")
 }
 
 enum NotificationChannel {

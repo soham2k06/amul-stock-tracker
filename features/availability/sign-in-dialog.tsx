@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Eye, EyeOff } from "lucide-react";
 import {
   Dialog,
@@ -77,7 +78,8 @@ export function SignInDialog({ open, onOpenChange, onSuccess }: Props) {
           password,
           rememberMe,
         });
-        if (result.error) throw new Error(result.error.message ?? "Sign in failed");
+        if (result.error)
+          throw new Error(result.error.message ?? "Sign in failed");
       } else {
         // better-auth's core still requires an email on every account; this
         // one is never shown or contacted - login is username-only.
@@ -87,7 +89,8 @@ export function SignInDialog({ open, onOpenChange, onSuccess }: Props) {
           name: username,
           username,
         });
-        if (result.error) throw new Error(result.error.message ?? "Sign up failed");
+        if (result.error)
+          throw new Error(result.error.message ?? "Sign up failed");
       }
       onSuccess?.();
       onOpenChange(false);
@@ -113,48 +116,70 @@ export function SignInDialog({ open, onOpenChange, onSuccess }: Props) {
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-          <Input
-            type="text"
-            placeholder="Username"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            required
-            autoComplete="username"
-          />
-          <div className="relative">
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="username">Username</Label>
             <Input
-              type={showPassword ? "text" : "password"}
-              placeholder="Password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              id="username"
+              type="text"
+              placeholder="user123"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
               required
-              autoComplete={mode === "signin" ? "current-password" : "new-password"}
-              className="pr-10"
+              autoComplete="username"
             />
-            <button
-              type="button"
-              onClick={() => setShowPassword((prev) => !prev)}
-              className="absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground hover:text-foreground"
-              aria-label={showPassword ? "Hide password" : "Show password"}
-            >
-              {showPassword ? (
-                <EyeOff className="size-4" />
-              ) : (
-                <Eye className="size-4" />
-              )}
-            </button>
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="password">Password</Label>
+            <div className="relative">
+              <Input
+                id="password"
+                type={showPassword ? "text" : "password"}
+                placeholder="********"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                autoComplete={
+                  mode === "signin" ? "current-password" : "new-password"
+                }
+                className="pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((prev) => !prev)}
+                className="absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground hover:text-foreground"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? (
+                  <EyeOff className="size-4" />
+                ) : (
+                  <Eye className="size-4" />
+                )}
+              </button>
+            </div>
           </div>
 
           {mode === "signin" && (
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="remember-me"
-                checked={rememberMe}
-                onCheckedChange={(checked) => setRememberMe(checked === true)}
-              />
-              <Label htmlFor="remember-me" className="text-sm font-normal cursor-pointer">
-                Remember me
-              </Label>
+            <div className="flex items-center justify-between gap-2 mt-4">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="remember-me"
+                  checked={rememberMe}
+                  onCheckedChange={(checked) => setRememberMe(checked === true)}
+                />
+                <Label
+                  htmlFor="remember-me"
+                  className="text-sm font-normal cursor-pointer"
+                >
+                  Remember me
+                </Label>
+              </div>
+              <Link
+                href="/forgot-password"
+                onClick={() => onOpenChange(false)}
+                className="text-sm font-medium text-muted-foreground underline underline-offset-4 hover:text-foreground"
+              >
+                Forgot password?
+              </Link>
             </div>
           )}
 

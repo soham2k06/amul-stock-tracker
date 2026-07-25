@@ -32,6 +32,30 @@ export async function sendNotificationEmailVerification(
   });
 }
 
+export async function sendRecoveryEmailVerification(to: string, url: string) {
+  await sendEmail({
+    to,
+    subject: "Confirm your recovery email - Amul Stock Tracker",
+    html: `
+      <p>Confirm this address to use it for password recovery on your account.</p>
+      <p><a href="${url}">Confirm email</a></p>
+      <p>If you didn't request this, you can ignore this email.</p>
+    `,
+  });
+}
+
+export async function sendResetPasswordEmail(to: string, url: string) {
+  await sendEmail({
+    to,
+    subject: "Reset your password - Amul Stock Tracker",
+    html: `
+      <p>We received a request to reset your password.</p>
+      <p><a href="${url}">Reset password</a></p>
+      <p>This link expires in 1 hour. If you didn't request this, you can ignore this email.</p>
+    `,
+  });
+}
+
 export async function sendStockAlertEmail(
   to: string,
   { title, body, url }: { title: string; body: string; url: string },
