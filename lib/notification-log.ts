@@ -1,15 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import type { NotificationChannel, NotificationType } from "@prisma/client";
 
-export async function logNotification({
-  userId,
-  channel,
-  type,
-  productId,
-  productName,
-  status,
-  error,
-}: {
+export type NotificationLogEntry = {
   userId: string;
   channel: NotificationChannel;
   type: NotificationType;
@@ -17,8 +9,16 @@ export async function logNotification({
   productName?: string;
   status: "SENT" | "FAILED";
   error?: string;
-}) {
-  await prisma.notificationLog.create({
-    data: { userId, channel, type, productId, productName, status, error },
-  });
+};
+
+export async function logNotification(entry: NotificationLogEntry) {
+  await prisma.notificationLog.create({ data: entry });
+}
+
+// Batched variant for hot paths (e.g. the per-minute notification sweep)
+// that can produce many log rows in one run - one insert instead of one
+// per channel per subscription.
+export async function logNotificationsBatch(entries: NotificationLogEntry[]) {
+  if (entries.length === 0) return;
+  await prisma.notificationLog.createMany({ data: entries });
 }

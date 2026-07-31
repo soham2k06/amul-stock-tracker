@@ -62,6 +62,9 @@ const productFields = [
 ];
 
 export const substoreSessions: Map<string, AmulApi> = new Map();
+// Pincode-to-substore mapping is effectively static, so cache it to avoid
+// hitting Amul's pincode endpoint on every call for the same pincode.
+const pincodeRecordCache: Map<string, PincodeRecord> = new Map();
 let defaultSession: AmulApi | null = null;
 
 export class AmulApi {
@@ -290,17 +293,23 @@ export async function getDefaultSession(): Promise<AmulApi> {
 }
 
 export async function createAmulApi(pincode: string): Promise<AmulApi> {
-  const session = await getDefaultSession();
-  const records = await session.searchPincode(pincode);
+  let record = pincodeRecordCache.get(pincode);
 
-  if (!records.length) {
-    throw new AmulError(
-      `No substore found for pincode ${pincode}`,
-      AMUL_ERROR_CODE.PINCODE_NOT_FOUND,
-    );
+  if (!record) {
+    const session = await getDefaultSession();
+    const records = await session.searchPincode(pincode);
+
+    if (!records.length) {
+      throw new AmulError(
+        `No substore found for pincode ${pincode}`,
+        AMUL_ERROR_CODE.PINCODE_NOT_FOUND,
+      );
+    }
+
+    record = records[0];
+    pincodeRecordCache.set(pincode, record);
   }
 
-  const record = records[0];
   const existing = substoreSessions.get(record.substore);
   if (existing) return existing;
 

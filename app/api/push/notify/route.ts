@@ -5,7 +5,7 @@ import { sendTelegramMessage } from "@/lib/telegram";
 import { sendStockAlertEmail } from "@/lib/email";
 import { searchAmulProducts } from "@/lib/amul/client";
 import { getSiteUrl } from "@/lib/site-url";
-import { logNotification } from "@/lib/notification-log";
+import { logNotificationsBatch, type NotificationLogEntry } from "@/lib/notification-log";
 import type { NotificationType } from "@prisma/client";
 import type { ProductAvailability } from "@/types/amul";
 
@@ -31,12 +31,31 @@ function buildStockMessageBody(
   ].join("\n");
 }
 
+const subscriptionSelect = {
+  id: true,
+  userId: true,
+  productId: true,
+  productName: true,
+  lastAvailable: true,
+  lastLowStock: true,
+  user: {
+    select: {
+      emailNotificationsEnabled: true,
+      notificationEmail: true,
+      notificationEmailVerified: true,
+      pushSubscriptions: { select: { id: true, endpoint: true, p256dh: true, auth: true } },
+      telegramConnection: { select: { chatId: true } },
+    },
+  },
+} as const;
+
 async function processSubscription(
-  sub: Awaited<ReturnType<typeof prisma.subscription.findMany<{
-    include: { user: { include: { pushSubscriptions: true; telegramConnection: true } } };
-  }>>>[number],
+  sub: Awaited<
+    ReturnType<typeof prisma.subscription.findMany<{ select: typeof subscriptionSelect }>>
+  >[number],
   product: ProductAvailability | undefined,
   pincode: string,
+  logs: NotificationLogEntry[],
 ): Promise<number> {
   if (!product) return 0;
 
@@ -66,7 +85,7 @@ async function processSubscription(
             await prisma.pushSubscription.delete({ where: { id: pushSub.id } });
             return false;
           }
-          await logNotification({
+          logs.push({
             userId: sub.userId,
             channel: "PUSH",
             type: notificationType,
@@ -76,7 +95,7 @@ async function processSubscription(
           });
           return true;
         } catch (err) {
-          await logNotification({
+          logs.push({
             userId: sub.userId,
             channel: "PUSH",
             type: notificationType,
@@ -96,7 +115,7 @@ async function processSubscription(
                   sub.user.telegramConnection!.chatId,
                   `${title}\n${body}`,
                 );
-                await logNotification({
+                logs.push({
                   userId: sub.userId,
                   channel: "TELEGRAM",
                   type: notificationType,
@@ -106,7 +125,7 @@ async function processSubscription(
                 });
                 return true;
               } catch (err) {
-                await logNotification({
+                logs.push({
                   userId: sub.userId,
                   channel: "TELEGRAM",
                   type: notificationType,
@@ -131,7 +150,7 @@ async function processSubscription(
                   body,
                   url: `${SITE_URL}${url}`,
                 });
-                await logNotification({
+                logs.push({
                   userId: sub.userId,
                   channel: "EMAIL",
                   type: notificationType,
@@ -141,7 +160,7 @@ async function processSubscription(
                 });
                 return true;
               } catch (err) {
-                await logNotification({
+                logs.push({
                   userId: sub.userId,
                   channel: "EMAIL",
                   type: notificationType,
@@ -167,21 +186,22 @@ async function processSubscription(
   // restock cycle.
   const newLastLowStock = available ? sub.lastLowStock || isLowStock : false;
 
-  await prisma.subscription.update({
-    where: { id: sub.id },
-    data: { lastAvailable: available, lastLowStock: newLastLowStock },
-  });
+  // Skip the write entirely when nothing changed - this is the common case
+  // on every run and was previously costing a DB round trip per subscription
+  // per minute regardless of whether stock state actually moved.
+  if (sub.lastAvailable !== available || sub.lastLowStock !== newLastLowStock) {
+    await prisma.subscription.update({
+      where: { id: sub.id },
+      data: { lastAvailable: available, lastLowStock: newLastLowStock },
+    });
+  }
 
   return notified;
 }
 
 async function runNotifications() {
   const subscriptions = await prisma.subscription.findMany({
-    include: {
-      user: {
-        include: { pushSubscriptions: true, telegramConnection: true },
-      },
-    },
+    select: { ...subscriptionSelect, pincode: true },
   });
 
   if (subscriptions.length === 0) {
@@ -196,6 +216,10 @@ async function runNotifications() {
     byPincode.set(sub.pincode, list);
   }
 
+  // Collected across the whole run and flushed in a single createMany, instead
+  // of one insert per channel per subscription.
+  const logs: NotificationLogEntry[] = [];
+
   const pincodeCounts = await Promise.allSettled(
     Array.from(byPincode.entries()).map(async ([pincode, subs]) => {
       const result = await searchAmulProducts(pincode, undefined, {
@@ -207,7 +231,9 @@ async function runNotifications() {
       const productById = new Map(result.results.map((p) => [p.productId, p]));
 
       const subCounts = await Promise.allSettled(
-        subs.map((sub) => processSubscription(sub, productById.get(sub.productId), pincode)),
+        subs.map((sub) =>
+          processSubscription(sub, productById.get(sub.productId), pincode, logs),
+        ),
       );
       return subCounts.reduce((sum, r) => sum + (r.status === "fulfilled" ? r.value : 0), 0);
     }),
@@ -217,6 +243,8 @@ async function runNotifications() {
     (sum, r) => sum + (r.status === "fulfilled" ? r.value : 0),
     0,
   );
+
+  await logNotificationsBatch(logs);
 
   return { checked: subscriptions.length, notified };
 }
