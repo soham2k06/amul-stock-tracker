@@ -5,9 +5,9 @@ import { prisma } from "./prisma";
 
 // Login is username-based. better-auth's core still requires an `email` on
 // every user record, so sign-up sends a synthetic, never-contacted address
-// (see sign-in-dialog.tsx) - hence username needs to accept the wider
-// character set of a legacy account's email-shaped username too.
-const usernamePattern = /^[a-zA-Z0-9_.@+-]+$/;
+// built as `${username}@users.noreply.invalid` (see sign-in-dialog.tsx) -
+// `@` is excluded here so a username can't produce a malformed address.
+const usernamePattern = /^[a-zA-Z0-9_.+-]+$/;
 
 export const auth = betterAuth({
   // rateLimit: {

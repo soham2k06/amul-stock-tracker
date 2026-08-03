@@ -26,7 +26,7 @@ type Props = {
 
 // Mirrors the usernameValidator/min-max length in lib/auth.ts so bad
 // usernames are caught before the round trip to the server.
-const USERNAME_PATTERN = /^[a-zA-Z0-9_.@+-]+$/;
+const USERNAME_PATTERN = /^[a-zA-Z0-9_.+-]+$/;
 const USERNAME_MIN_LENGTH = 3;
 const USERNAME_MAX_LENGTH = 30;
 
@@ -38,7 +38,7 @@ function validateUsername(username: string): string | null {
     return `Username must be at most ${USERNAME_MAX_LENGTH} characters`;
   }
   if (!USERNAME_PATTERN.test(username)) {
-    return "Username can only contain letters, numbers, and _ . @ + -";
+    return "Username can only contain letters, numbers, and _ . + -";
   }
   return null;
 }
